@@ -25,6 +25,7 @@ from services.documents import (
     DocumentNotFound,
     DocumentService,
     DocumentServiceError,
+    EmptyUpload,
     IdempotencyConflict,
     InvalidDocumentType,
     UploadTooLarge,
@@ -155,6 +156,10 @@ def _raise_http_error(error: DocumentServiceError) -> None:
         status_code = status.HTTP_413_CONTENT_TOO_LARGE
         code = "upload_too_large"
         message = "The uploaded document exceeds the size limit."
+    elif isinstance(error, EmptyUpload):
+        status_code = status.HTTP_400_BAD_REQUEST
+        code = "empty_upload"
+        message = "The uploaded document is empty."
     elif isinstance(error, IdempotencyConflict):
         status_code = status.HTTP_409_CONFLICT
         code = "idempotency_conflict"

@@ -13,6 +13,7 @@ from config.settings import get_settings
 from main import app as production_app
 from services.documents import (
     DocumentNotFound,
+    EmptyUpload,
     IdempotencyConflict,
     InvalidDocumentType,
     UploadTooLarge,
@@ -216,6 +217,7 @@ def test_delete_document_returns_202_and_requests_deletion() -> None:
         (InvalidDocumentType(), 415, "unsupported_media_type"),
         (UploadTooLarge(), 413, "upload_too_large"),
         (IdempotencyConflict(), 409, "idempotency_conflict"),
+        (EmptyUpload(), 400, "empty_upload"),
     ],
 )
 def test_upload_maps_domain_errors_to_safe_http_responses(
