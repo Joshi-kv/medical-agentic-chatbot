@@ -10,6 +10,7 @@ class Settings(BaseSettings):
 
     google_api_key: str
     embedding_model: str
+    embedding_dimension: int = 768
     chat_model: str
     vision_model: str
 
@@ -17,6 +18,8 @@ class Settings(BaseSettings):
 
     pinecone_api_key: str
     pinecone_index_name: str
+    pinecone_cloud: str = "aws"
+    pinecone_region: str = "us-east-1"
 
 
 @lru_cache
