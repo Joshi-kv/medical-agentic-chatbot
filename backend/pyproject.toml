@@ -1,0 +1,47 @@
+[project]
+name = "backend"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.162.0",
+    "langchain>=1.4.8",
+    "langchain-google-genai>=4.4.2",
+    "langchain-tavily>=0.2.18",
+    "langgraph>=1.2.19",
+    "pydantic-settings>=2.16.2",
+    "pymupdf>=2.1",
+    "python-dotenv>=1.2.4",
+]
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.fastapi]
+entrypoint = "src.main:app"
+
+[tool.ruff]
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["agent", "api", "config", "helpers", "integrations"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.17.3",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = [
+    "integration: exercises live external services (Supabase, Groq); deselected by default",
+]
+addopts = "-m 'not integration'"
