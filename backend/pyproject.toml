@@ -13,6 +13,7 @@ dependencies = [
     "pymupdf>=2.1",
     "pytest>=9.2.0",
     "python-dotenv>=1.2.4",
+    "supabase>=2.27.0,<3",
     "tavily-python>=0.8.5",
 ]
 
@@ -33,7 +34,7 @@ src = ["src"]
 select = ["E", "F", "I"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["agent", "api", "config", "helpers", "ingestion", "integrations"]
+known-first-party = ["agent", "api", "config", "helpers", "ingestion", "integrations", "repositories", "services", "storage"]
 
 [dependency-groups]
 dev = [
@@ -47,4 +48,4 @@ testpaths = ["src/tests"]
 markers = [
     "integration: exercises live external services (Supabase, Groq); deselected by default",
 ]
-addopts = "-m 'not integration'"
+addopts = "-m 'not integration' --import-mode=importlib"

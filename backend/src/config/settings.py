@@ -27,6 +27,12 @@ class Settings(BaseSettings):
     api_key_tenant_id: str
     api_key_id: str = "primary"
 
+    supabase_url: str | None = None
+    supabase_service_role_key: SecretStr | None = None
+    supabase_document_bucket: str = "medical-documents"
+    max_upload_bytes: int = 20 * 1024 * 1024
+    ingestion_pipeline_version: str = "1"
+
 
 @lru_cache
 def get_settings() -> Settings:
