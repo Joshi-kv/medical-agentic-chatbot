@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +21,11 @@ class Settings(BaseSettings):
     pinecone_index_name: str
     pinecone_cloud: str = "aws"
     pinecone_region: str = "us-east-1"
+    pinecone_namespace: str
+
+    ingestion_api_key: SecretStr
+    api_key_tenant_id: str
+    api_key_id: str = "primary"
 
 
 @lru_cache
