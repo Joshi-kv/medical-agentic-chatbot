@@ -33,7 +33,7 @@ src = ["src"]
 select = ["E", "F", "I"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["agent", "api", "config", "helpers", "integrations"]
+known-first-party = ["agent", "api", "config", "helpers", "ingestion", "integrations"]
 
 [dependency-groups]
 dev = [
@@ -43,7 +43,7 @@ dev = [
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
-testpaths = ["tests"]
+testpaths = ["src/tests"]
 markers = [
     "integration: exercises live external services (Supabase, Groq); deselected by default",
 ]
