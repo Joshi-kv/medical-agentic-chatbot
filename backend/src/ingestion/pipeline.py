@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import TypeVar
 
 from langchain_core.embeddings import Embeddings
-from openai import RateLimitError
+from openai import APIStatusError
 
 from config.settings import get_settings
 from ingestion.chunker import chunk_pages
@@ -23,6 +23,7 @@ from integrations.pinecone import get_pinecone_index
 EMBEDDING_BATCH_SIZE = 32
 EMBEDDING_RATE_LIMIT_MAX_RETRIES = 5
 EMBEDDING_RATE_LIMIT_DEFAULT_DELAY_SECONDS = 60.0
+EMBEDDING_SERVER_ERROR_BASE_DELAY_SECONDS = 2.0
 PINECONE_BATCH_SIZE = 100
 
 Item = TypeVar("Item")
@@ -145,23 +146,35 @@ def _embed_documents_with_rate_limit_retry(
     for retry_count in range(EMBEDDING_RATE_LIMIT_MAX_RETRIES + 1):
         try:
             return embeddings_client.embed_documents(texts)
-        except RateLimitError as error:
-            if retry_count == EMBEDDING_RATE_LIMIT_MAX_RETRIES:
+        except APIStatusError as error:
+            delay = _nvidia_retry_delay(error, retry_count)
+            if delay is None or retry_count == EMBEDDING_RATE_LIMIT_MAX_RETRIES:
                 raise
-            delay = _nvidia_rate_limit_retry_delay(error)
             time.sleep(delay)
 
     raise RuntimeError("Embedding retry loop exited unexpectedly.")
 
 
-def _nvidia_rate_limit_retry_delay(error: RateLimitError) -> float:
-    retry_after = error.response.headers.get("retry-after")
-    if retry_after is not None:
-        try:
-            return max(float(retry_after), 0.0) + 1.0
-        except ValueError:
-            pass
-    return EMBEDDING_RATE_LIMIT_DEFAULT_DELAY_SECONDS
+def _nvidia_retry_delay(
+    error: APIStatusError,
+    retry_count: int,
+) -> float | None:
+    if error.status_code == 429:
+        retry_after = error.response.headers.get("retry-after")
+        if retry_after is not None:
+            try:
+                return max(float(retry_after), 0.0) + 1.0
+            except ValueError:
+                pass
+        return EMBEDDING_RATE_LIMIT_DEFAULT_DELAY_SECONDS
+
+    if error.status_code >= 500:
+        return min(
+            EMBEDDING_SERVER_ERROR_BASE_DELAY_SECONDS * (2**retry_count),
+            EMBEDDING_RATE_LIMIT_DEFAULT_DELAY_SECONDS,
+        )
+
+    return None
 
 
 def _create_vector_record(

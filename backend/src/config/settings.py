@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
     embedding_model: str = "nvidia/nemotron-3.5-embed-1b"
     embedding_dimension: int = Field(default=1024, gt=0, le=2048)
-    embedding_batch_size: int = Field(default=32, gt=0, le=128)
+    embedding_batch_size: int = Field(default=1, gt=0, le=128)
     embedding_timeout_seconds: float = Field(default=120, gt=0, le=600)
 
     tavily_api_key: str

@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
-from openai import RateLimitError
+from openai import InternalServerError, RateLimitError
 
 from ingestion.exceptions import PDFNotFoundError
 from ingestion.pipeline import (
@@ -161,6 +161,37 @@ def test_embed_chunks_waits_and_retries_nvidia_rate_limit() -> None:
     assert records[0]["id"] == "c-0"
     assert records[0]["values"] == [0.1, 0.2, 0.3]
     sleep.assert_called_once_with(3.0)
+
+
+def test_embed_chunks_waits_and_retries_nvidia_server_error() -> None:
+    chunk = make_chunk(chunk_id="c-0")
+    request = httpx.Request(
+        "POST", "https://integrate.api.nvidia.com/v1/embeddings"
+    )
+    response = httpx.Response(500, request=request)
+    server_error = InternalServerError(
+        "service inference failed",
+        response=response,
+        body=None,
+    )
+
+    embeddings_client = MagicMock()
+    embeddings_client.embed_documents.side_effect = [
+        server_error,
+        [[0.1, 0.2, 0.3]],
+    ]
+
+    with (
+        patch(
+            "ingestion.pipeline.get_nvidia_nim_embeddings",
+            return_value=embeddings_client,
+        ),
+        patch("time.sleep") as sleep,
+    ):
+        records = _embed_chunks([chunk])
+
+    assert records[0]["values"] == [0.1, 0.2, 0.3]
+    sleep.assert_called_once_with(2.0)
 
 
 def test_rollback_vectors_invokes_index_delete() -> None:
