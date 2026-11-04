@@ -2,6 +2,8 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from google.genai.errors import ClientError
+from langchain_google_genai._common import GoogleGenerativeAIError
 
 from ingestion.exceptions import PDFNotFoundError
 from ingestion.pipeline import (
@@ -123,6 +125,47 @@ def test_embed_chunks_mismatched_count_raises_runtime_error() -> None:
     ):
         with pytest.raises(RuntimeError, match="unexpected vector count"):
             _embed_chunks(chunks)
+
+
+def test_embed_chunks_waits_and_retries_google_rate_limit() -> None:
+    chunk = make_chunk(chunk_id="c-0")
+    provider_error = ClientError(
+        429,
+        {
+            "error": {
+                "code": 429,
+                "message": "Embedding token quota exceeded.",
+                "status": "RESOURCE_EXHAUSTED",
+                "details": [
+                    {
+                        "@type": "type.googleapis.com/google.rpc.RetryInfo",
+                        "retryDelay": "2s",
+                    }
+                ],
+            }
+        },
+    )
+    rate_limit_error = GoogleGenerativeAIError("rate limited")
+    rate_limit_error.__cause__ = provider_error
+
+    embeddings_client = MagicMock()
+    embeddings_client.embed_documents.side_effect = [
+        rate_limit_error,
+        [[0.1, 0.2, 0.3]],
+    ]
+
+    with (
+        patch(
+            "ingestion.pipeline.get_google_genai_embeddings",
+            return_value=embeddings_client,
+        ),
+        patch("time.sleep") as sleep,
+    ):
+        records = _embed_chunks([chunk])
+
+    assert records[0]["id"] == "c-0"
+    assert records[0]["values"] == [0.1, 0.2, 0.3]
+    sleep.assert_called_once_with(3.0)
 
 
 def test_rollback_vectors_invokes_index_delete() -> None:

@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     supabase_document_bucket: str = "medical-documents"
     max_upload_bytes: int = 20 * 1024 * 1024
     ingestion_pipeline_version: str = "1"
+    ingestion_worker_poll_seconds: float = Field(default=5, gt=0, le=300)
+    ingestion_job_lease_seconds: int = Field(default=1800, gt=0, le=86400)
+    ingestion_retry_base_seconds: int = Field(default=30, gt=0, le=3600)
 
 
 @lru_cache

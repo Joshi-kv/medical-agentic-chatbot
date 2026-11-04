@@ -1,7 +1,12 @@
+import time
 from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TypeVar
+
+from google.genai.errors import APIError
+from langchain_core.embeddings import Embeddings
+from langchain_google_genai._common import GoogleGenerativeAIError
 
 from config.settings import get_settings
 from ingestion.chunker import chunk_pages
@@ -17,6 +22,8 @@ from integrations.google_genai import get_google_genai_embeddings
 from integrations.pinecone import get_pinecone_index
 
 EMBEDDING_BATCH_SIZE = 32
+EMBEDDING_RATE_LIMIT_MAX_RETRIES = 5
+EMBEDDING_RATE_LIMIT_DEFAULT_DELAY_SECONDS = 60.0
 PINECONE_BATCH_SIZE = 100
 
 Item = TypeVar("Item")
@@ -107,7 +114,10 @@ def _embed_chunks(chunks: list[DocumentChunk]) -> list[dict]:
     for chunk_batch in _batched(chunks, EMBEDDING_BATCH_SIZE):
         texts = [chunk.text for chunk in chunk_batch]
 
-        embeddings = embeddings_client.embed_documents(texts)
+        embeddings = _embed_documents_with_rate_limit_retry(
+            embeddings_client,
+            texts,
+        )
 
         if len(embeddings) != len(chunk_batch):
             raise RuntimeError(
@@ -127,6 +137,53 @@ def _embed_chunks(chunks: list[DocumentChunk]) -> list[dict]:
             )
 
     return records
+
+
+def _embed_documents_with_rate_limit_retry(
+    embeddings_client: Embeddings,
+    texts: list[str],
+) -> list[list[float]]:
+    for retry_count in range(EMBEDDING_RATE_LIMIT_MAX_RETRIES + 1):
+        try:
+            return embeddings_client.embed_documents(texts)
+        except GoogleGenerativeAIError as error:
+            delay = _google_rate_limit_retry_delay(error)
+            if delay is None or retry_count == EMBEDDING_RATE_LIMIT_MAX_RETRIES:
+                raise
+            time.sleep(delay)
+
+    raise RuntimeError("Embedding retry loop exited unexpectedly.")
+
+
+def _google_rate_limit_retry_delay(
+    error: GoogleGenerativeAIError,
+) -> float | None:
+    cause = error.__cause__
+    if not isinstance(cause, APIError) or cause.code != 429:
+        return None
+
+    payload = cause.details
+    if not isinstance(payload, dict):
+        return EMBEDDING_RATE_LIMIT_DEFAULT_DELAY_SECONDS
+
+    error_payload = payload.get("error", payload)
+    if not isinstance(error_payload, dict):
+        return EMBEDDING_RATE_LIMIT_DEFAULT_DELAY_SECONDS
+
+    for detail in error_payload.get("details", []):
+        if not isinstance(detail, dict):
+            continue
+        if not str(detail.get("@type", "")).endswith("RetryInfo"):
+            continue
+
+        retry_delay = detail.get("retryDelay")
+        if isinstance(retry_delay, str) and retry_delay.endswith("s"):
+            try:
+                return max(float(retry_delay[:-1]), 0.0) + 1.0
+            except ValueError:
+                break
+
+    return EMBEDDING_RATE_LIMIT_DEFAULT_DELAY_SECONDS
 
 
 def _create_vector_record(

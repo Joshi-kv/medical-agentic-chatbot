@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -10,6 +11,21 @@ from services.documents import (
     DocumentRecord,
     IdempotencyConflict,
 )
+
+
+@dataclass(frozen=True)
+class IngestionJob:
+    job_id: str
+    document_id: str
+    tenant_id: str
+    filename: str
+    title: str | None
+    content_type: str
+    size_bytes: int
+    checksum: str
+    storage_key: str
+    attempts: int
+    max_attempts: int
 
 
 class SupabaseDocumentStore:
@@ -115,6 +131,113 @@ class SupabaseDocumentStore:
             return bool(data[0]) if data else False
         return bool(data)
 
+    async def claim_ingestion_job(
+        self,
+        *,
+        worker_id: str,
+        lease_seconds: int,
+    ) -> IngestionJob | None:
+        response = await to_thread.run_sync(
+            lambda: self._client.rpc(
+                "claim_ingestion_job",
+                {
+                    "p_worker_id": worker_id,
+                    "p_lease_seconds": lease_seconds,
+                },
+            ).execute()
+        )
+        if not response.data:
+            return None
+        row = _first_row(response.data)
+        return IngestionJob(
+            job_id=str(row["job_id"]),
+            document_id=str(row["document_id"]),
+            tenant_id=str(row["tenant_id"]),
+            filename=str(row["filename"]),
+            title=_optional_string(row.get("title")),
+            content_type=str(row["content_type"]),
+            size_bytes=int(row["size_bytes"]),
+            checksum=str(row["checksum"]),
+            storage_key=str(row["storage_key"]),
+            attempts=int(row["attempts"]),
+            max_attempts=int(row["max_attempts"]),
+        )
+
+    async def complete_ingestion_job(
+        self,
+        *,
+        job_id: str,
+        document_id: str,
+        tenant_id: str,
+        worker_id: str,
+        progress: DocumentProgress,
+    ) -> bool:
+        response = await to_thread.run_sync(
+            lambda: self._client.rpc(
+                "complete_ingestion_job",
+                {
+                    "p_job_id": job_id,
+                    "p_document_id": document_id,
+                    "p_tenant_id": tenant_id,
+                    "p_worker_id": worker_id,
+                    "p_pages_processed": progress.pages_processed,
+                    "p_pages_requiring_ocr": progress.pages_requiring_ocr,
+                    "p_chunks_created": progress.chunks_created,
+                    "p_vectors_upserted": progress.vectors_upserted,
+                },
+            ).execute()
+        )
+        return bool(_scalar(response.data))
+
+    async def renew_ingestion_job_lease(
+        self,
+        *,
+        job_id: str,
+        worker_id: str,
+    ) -> bool:
+        response = await to_thread.run_sync(
+            lambda: self._client.rpc(
+                "renew_ingestion_job_lease",
+                {
+                    "p_job_id": job_id,
+                    "p_worker_id": worker_id,
+                },
+            ).execute()
+        )
+        return bool(_scalar(response.data))
+
+    async def fail_ingestion_job(
+        self,
+        *,
+        job_id: str,
+        document_id: str,
+        tenant_id: str,
+        worker_id: str,
+        error_code: str,
+        error_message: str,
+        progress: DocumentProgress,
+        retry_base_seconds: int,
+    ) -> str:
+        response = await to_thread.run_sync(
+            lambda: self._client.rpc(
+                "fail_ingestion_job",
+                {
+                    "p_job_id": job_id,
+                    "p_document_id": document_id,
+                    "p_tenant_id": tenant_id,
+                    "p_worker_id": worker_id,
+                    "p_error_code": error_code,
+                    "p_error_message": error_message,
+                    "p_pages_processed": progress.pages_processed,
+                    "p_pages_requiring_ocr": progress.pages_requiring_ocr,
+                    "p_chunks_created": progress.chunks_created,
+                    "p_vectors_upserted": progress.vectors_upserted,
+                    "p_retry_base_seconds": retry_base_seconds,
+                },
+            ).execute()
+        )
+        return str(_scalar(response.data))
+
 
 def _first_row(data: object) -> dict[str, Any]:
     if isinstance(data, list) and data and isinstance(data[0], dict):
@@ -122,6 +245,14 @@ def _first_row(data: object) -> dict[str, Any]:
     if isinstance(data, dict):
         return data
     raise RuntimeError("Supabase returned an unexpected document response")
+
+
+def _scalar(data: object) -> object:
+    if isinstance(data, list):
+        if not data:
+            return None
+        return data[0]
+    return data
 
 
 def _optional_string(value: object) -> str | None:
