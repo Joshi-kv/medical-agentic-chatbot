@@ -35,6 +35,7 @@ class FakeBucket:
     def __init__(self) -> None:
         self.upload_call: tuple[str, bytes, dict[str, str]] | None = None
         self.removed: list[str] | None = None
+        self.downloaded_path: str | None = None
 
     def upload(
         self,
@@ -46,6 +47,10 @@ class FakeBucket:
 
     def remove(self, paths: list[str]) -> None:
         self.removed = paths
+
+    def download(self, path: str) -> bytes:
+        self.downloaded_path = path
+        return b"%PDF-1.7\nbody"
 
 
 class FakeStorageRoot:
@@ -92,6 +97,19 @@ async def test_supabase_storage_uploads_private_pdf_without_upsert() -> None:
         {"content-type": "application/pdf", "cache-control": "3600", "upsert": "false"},
     )
     assert client.bucket.removed == ["tenants/t/documents/d/original.pdf"]
+
+
+@pytest.mark.anyio
+async def test_supabase_storage_downloads_private_pdf() -> None:
+    client = FakeClient()
+    storage = SupabaseDocumentStorage(client=client, bucket="medical-documents")
+
+    content = await storage.download(
+        storage_key="tenants/t/documents/d/original.pdf"
+    )
+
+    assert content == b"%PDF-1.7\nbody"
+    assert client.bucket.downloaded_path == "tenants/t/documents/d/original.pdf"
 
 
 @pytest.mark.anyio
