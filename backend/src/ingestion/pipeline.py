@@ -4,9 +4,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TypeVar
 
-from google.genai.errors import APIError
 from langchain_core.embeddings import Embeddings
-from langchain_google_genai._common import GoogleGenerativeAIError
+from openai import RateLimitError
 
 from config.settings import get_settings
 from ingestion.chunker import chunk_pages
@@ -18,7 +17,7 @@ from ingestion.schemas import (
     IngestionStatus,
     SourceDocument,
 )
-from integrations.google_genai import get_google_genai_embeddings
+from integrations.nvidia_nim import get_nvidia_nim_embeddings
 from integrations.pinecone import get_pinecone_index
 
 EMBEDDING_BATCH_SIZE = 32
@@ -108,7 +107,7 @@ def ingest_pdf(document: SourceDocument, file_path: Path) -> IngestionResult:
 def _embed_chunks(chunks: list[DocumentChunk]) -> list[dict]:
     """Embed chunks and prepare them for upserting."""
 
-    embeddings_client = get_google_genai_embeddings()
+    embeddings_client = get_nvidia_nim_embeddings()
     records: list[dict] = []
 
     for chunk_batch in _batched(chunks, EMBEDDING_BATCH_SIZE):
@@ -146,43 +145,22 @@ def _embed_documents_with_rate_limit_retry(
     for retry_count in range(EMBEDDING_RATE_LIMIT_MAX_RETRIES + 1):
         try:
             return embeddings_client.embed_documents(texts)
-        except GoogleGenerativeAIError as error:
-            delay = _google_rate_limit_retry_delay(error)
-            if delay is None or retry_count == EMBEDDING_RATE_LIMIT_MAX_RETRIES:
+        except RateLimitError as error:
+            if retry_count == EMBEDDING_RATE_LIMIT_MAX_RETRIES:
                 raise
+            delay = _nvidia_rate_limit_retry_delay(error)
             time.sleep(delay)
 
     raise RuntimeError("Embedding retry loop exited unexpectedly.")
 
 
-def _google_rate_limit_retry_delay(
-    error: GoogleGenerativeAIError,
-) -> float | None:
-    cause = error.__cause__
-    if not isinstance(cause, APIError) or cause.code != 429:
-        return None
-
-    payload = cause.details
-    if not isinstance(payload, dict):
-        return EMBEDDING_RATE_LIMIT_DEFAULT_DELAY_SECONDS
-
-    error_payload = payload.get("error", payload)
-    if not isinstance(error_payload, dict):
-        return EMBEDDING_RATE_LIMIT_DEFAULT_DELAY_SECONDS
-
-    for detail in error_payload.get("details", []):
-        if not isinstance(detail, dict):
-            continue
-        if not str(detail.get("@type", "")).endswith("RetryInfo"):
-            continue
-
-        retry_delay = detail.get("retryDelay")
-        if isinstance(retry_delay, str) and retry_delay.endswith("s"):
-            try:
-                return max(float(retry_delay[:-1]), 0.0) + 1.0
-            except ValueError:
-                break
-
+def _nvidia_rate_limit_retry_delay(error: RateLimitError) -> float:
+    retry_after = error.response.headers.get("retry-after")
+    if retry_after is not None:
+        try:
+            return max(float(retry_after), 0.0) + 1.0
+        except ValueError:
+            pass
     return EMBEDDING_RATE_LIMIT_DEFAULT_DELAY_SECONDS
 
 
