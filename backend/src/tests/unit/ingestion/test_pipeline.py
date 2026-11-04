@@ -1,9 +1,9 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
-from google.genai.errors import ClientError
-from langchain_google_genai._common import GoogleGenerativeAIError
+from openai import RateLimitError
 
 from ingestion.exceptions import PDFNotFoundError
 from ingestion.pipeline import (
@@ -101,7 +101,7 @@ def test_embed_chunks_success() -> None:
     ]
 
     with patch(
-        "ingestion.pipeline.get_google_genai_embeddings",
+        "ingestion.pipeline.get_nvidia_nim_embeddings",
         return_value=mock_embeddings_client,
     ):
         records = _embed_chunks(chunks)
@@ -120,33 +120,28 @@ def test_embed_chunks_mismatched_count_raises_runtime_error() -> None:
     mock_embeddings_client.embed_documents.return_value = [[0.1, 0.2]]
 
     with patch(
-        "ingestion.pipeline.get_google_genai_embeddings",
+        "ingestion.pipeline.get_nvidia_nim_embeddings",
         return_value=mock_embeddings_client,
     ):
         with pytest.raises(RuntimeError, match="unexpected vector count"):
             _embed_chunks(chunks)
 
 
-def test_embed_chunks_waits_and_retries_google_rate_limit() -> None:
+def test_embed_chunks_waits_and_retries_nvidia_rate_limit() -> None:
     chunk = make_chunk(chunk_id="c-0")
-    provider_error = ClientError(
-        429,
-        {
-            "error": {
-                "code": 429,
-                "message": "Embedding token quota exceeded.",
-                "status": "RESOURCE_EXHAUSTED",
-                "details": [
-                    {
-                        "@type": "type.googleapis.com/google.rpc.RetryInfo",
-                        "retryDelay": "2s",
-                    }
-                ],
-            }
-        },
+    request = httpx.Request(
+        "POST", "https://integrate.api.nvidia.com/v1/embeddings"
     )
-    rate_limit_error = GoogleGenerativeAIError("rate limited")
-    rate_limit_error.__cause__ = provider_error
+    response = httpx.Response(
+        429,
+        request=request,
+        headers={"retry-after": "2"},
+    )
+    rate_limit_error = RateLimitError(
+        "rate limited",
+        response=response,
+        body=None,
+    )
 
     embeddings_client = MagicMock()
     embeddings_client.embed_documents.side_effect = [
@@ -156,7 +151,7 @@ def test_embed_chunks_waits_and_retries_google_rate_limit() -> None:
 
     with (
         patch(
-            "ingestion.pipeline.get_google_genai_embeddings",
+            "ingestion.pipeline.get_nvidia_nim_embeddings",
             return_value=embeddings_client,
         ),
         patch("time.sleep") as sleep,
@@ -230,7 +225,7 @@ def test_ingest_pdf_success() -> None:
         patch("ingestion.pipeline.load_pdf", return_value=mock_pages),
         patch("ingestion.pipeline.chunk_pages", return_value=mock_chunks),
         patch(
-            "ingestion.pipeline.get_google_genai_embeddings",
+            "ingestion.pipeline.get_nvidia_nim_embeddings",
             return_value=mock_embeddings_client,
         ),
         patch("ingestion.pipeline.get_pinecone_index", return_value=mock_index),
@@ -327,7 +322,7 @@ def test_ingest_pdf_upsert_failure_triggers_rollback() -> None:
         patch("ingestion.pipeline.load_pdf", return_value=mock_pages),
         patch("ingestion.pipeline.chunk_pages", return_value=mock_chunks),
         patch(
-            "ingestion.pipeline.get_google_genai_embeddings",
+            "ingestion.pipeline.get_nvidia_nim_embeddings",
             return_value=mock_embeddings_client,
         ),
         patch("ingestion.pipeline.get_pinecone_index", return_value=mock_index),

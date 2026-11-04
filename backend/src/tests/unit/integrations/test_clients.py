@@ -3,24 +3,24 @@ from uuid import uuid4
 
 import pytest
 
-from integrations.google_genai import get_google_genai_embeddings
+from integrations.nvidia_nim import get_nvidia_nim_embeddings
 from integrations.pinecone import get_pinecone_index
 from integrations.tavily import get_tavily_client
 
 pytestmark = pytest.mark.integration
 
 
-def test_google_embeddings_returns_expected_dimension() -> None:
-    embeddings = get_google_genai_embeddings()
+def test_nvidia_embeddings_returns_expected_dimension() -> None:
+    embeddings = get_nvidia_nim_embeddings()
 
     vector = embeddings.embed_query("The heart pumps blood through the body.")
 
-    assert len(vector) == 768
+    assert len(vector) == 1024
     assert all(isinstance(value, float) for value in vector)
 
 
 def test_pinecone_upsert_query_and_delete() -> None:
-    embeddings = get_google_genai_embeddings()
+    embeddings = get_nvidia_nim_embeddings()
     index = get_pinecone_index()
 
     namespace = "integration-tests"
