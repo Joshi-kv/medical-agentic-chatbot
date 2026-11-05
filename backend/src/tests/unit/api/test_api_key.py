@@ -5,7 +5,7 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.testclient import TestClient
 from pydantic import SecretStr, ValidationError
 
-from api.dependencies import require_scope
+from api.dependencies.security import require_scope
 from api.security.api_key import (
     APIPrincipal,
     AuthenticatedPrincipal,
