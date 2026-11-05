@@ -13,7 +13,8 @@ from fastapi import (
     status,
 )
 
-from api.dependencies import get_document_service, require_scope
+from api.dependencies.documents import get_document_service
+from api.dependencies.security import require_scope
 from api.schemas.documents import (
     DeletionAcceptedResponse,
     DocumentAcceptedResponse,

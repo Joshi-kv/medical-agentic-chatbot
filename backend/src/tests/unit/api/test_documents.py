@@ -7,7 +7,7 @@ from fastapi import FastAPI, status
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
-from api.dependencies import get_document_service
+from api.dependencies.documents import get_document_service
 from api.routers.documents import router
 from config.settings import get_settings
 from main import app as production_app
