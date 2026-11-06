@@ -25,6 +25,8 @@ class RetrievalMatch:
     chunk_number: int
     source: str
     title: str | None = None
+    content_hash: str | None = None
+    section: str | None = None
 
 
 @dataclass(frozen=True)
@@ -90,6 +92,8 @@ class RetrievalService:
                         chunk_number=int(metadata.get("chunk_number", 0)),
                         source=metadata.get("source", ""),
                         title=metadata.get("title"),
+                        content_hash=metadata.get("content_hash"),
+                        section=metadata.get("section"),
                     )
                 )
         except Exception as error:
