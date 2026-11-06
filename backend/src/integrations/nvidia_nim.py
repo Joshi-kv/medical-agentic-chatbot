@@ -1,7 +1,7 @@
 import math
 from functools import lru_cache
 
-from langchain_openai import OpenAIEmbeddings
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 from config.settings import get_settings
 
@@ -29,8 +29,7 @@ class NvidiaNIMEmbeddings(OpenAIEmbeddings):
             **kwargs,
         )
         return [
-            _truncate_and_normalize(vector, self.output_dimension)
-            for vector in vectors
+            _truncate_and_normalize(vector, self.output_dimension) for vector in vectors
         ]
 
     def embed_query(self, text: str, **kwargs: object) -> list[float]:
@@ -84,4 +83,25 @@ def get_nvidia_nim_embeddings() -> NvidiaNIMEmbeddings:
         chunk_size=settings.embedding_batch_size,
         max_retries=0,
         timeout=settings.embedding_timeout_seconds,
+    )
+
+
+@lru_cache()
+def get_nvidia_nim_chat_model() -> ChatOpenAI:
+    settings = get_settings()
+    if (
+        settings.nvidia_api_key is None
+        or not settings.nvidia_api_key.get_secret_value()
+    ):
+        raise ValueError("NVIDIA API key not configured.")
+    if not settings.nvidia_chat_model:
+        raise ValueError("NVIDIA chat model not configured.")
+
+    return ChatOpenAI(
+        model=settings.nvidia_chat_model,
+        api_key=settings.nvidia_api_key,
+        base_url=settings.nvidia_base_url,
+        temperature=0.1,
+        max_retries=2,
+        timeout=60,
     )

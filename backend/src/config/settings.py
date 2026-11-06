@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     embedding_dimension: int = Field(default=1024, gt=0, le=2048)
     embedding_batch_size: int = Field(default=1, gt=0, le=128)
     embedding_timeout_seconds: float = Field(default=120, gt=0, le=600)
+    nvidia_chat_model: str | None = None
 
     tavily_api_key: str
 
