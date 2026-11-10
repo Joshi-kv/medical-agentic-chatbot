@@ -92,5 +92,11 @@ def test_get_nvidia_nim_chat_model_success() -> None:
         assert model_1 is model_2
         assert model_1.model_name == "meta/llama-3.1-70b-instruct"
         assert model_1.temperature == 0.1
-        assert model_1.max_retries == 2
-        assert model_1.request_timeout == 60
+        assert model_1.max_tokens == 400
+        assert model_1.max_retries == 0
+        assert model_1.request_timeout == 30
+        assert model_1.extra_body == {
+            "chat_template_kwargs": {
+                "enable_thinking": False,
+            }
+        }

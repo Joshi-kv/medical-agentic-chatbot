@@ -29,7 +29,7 @@ class EvidenceService:
         retrieval_service: RetrievalService,
         min_score: float = 0.35,
         candidate_count: int = 15,
-        evidence_limit: int = 5,
+        evidence_limit: int = 3,
     ) -> None:
         self._retrieval_service = retrieval_service
         self._min_score = min_score
