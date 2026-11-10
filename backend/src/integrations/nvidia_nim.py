@@ -102,6 +102,12 @@ def get_nvidia_nim_chat_model() -> ChatOpenAI:
         api_key=settings.nvidia_api_key,
         base_url=settings.nvidia_base_url,
         temperature=0.1,
-        max_retries=2,
-        timeout=60,
+        max_tokens=400,
+        max_retries=0,
+        timeout=30,
+        extra_body={
+            "chat_template_kwargs": {
+                "enable_thinking": False,
+            }
+        },
     )
