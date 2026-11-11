@@ -9,10 +9,7 @@ from services.documents import DefaultDocumentService
 
 def make_settings(**overrides: Any) -> Settings:
     values: dict[str, Any] = {
-        "google_api_key": "google",
         "embedding_model": "embedding-model",
-        "chat_model": "chat-model",
-        "vision_model": "vision-model",
         "tavily_api_key": "tavily",
         "pinecone_api_key": "pinecone",
         "pinecone_index_name": "index",
