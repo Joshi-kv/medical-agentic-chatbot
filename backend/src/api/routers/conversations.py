@@ -231,6 +231,7 @@ async def create_turn(
         run_id=result.run_id,
         message_id=result.message.message_id,
         answer=result.message.content,
+        route=result.route,
         citations=[
             CitationResponse(
                 citation_label=item.citation_label,

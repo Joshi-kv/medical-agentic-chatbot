@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from api.dependencies.answering import get_answering_service
+from api.dependencies.medical_agent import get_medical_agent
 from config.settings import get_settings
 from integrations.supabase import get_supabase_client
 from repositories.supabase_conversations import SupabaseConversationStore
@@ -27,6 +27,6 @@ def get_turn_service() -> TurnService:
     return TurnService(
         conversations=get_conversation_service(),
         store=get_conversation_store(),
-        answering=get_answering_service(),
+        answering=get_medical_agent(),
         model_name=settings.nvidia_chat_model,
     )

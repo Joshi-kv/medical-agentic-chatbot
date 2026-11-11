@@ -49,7 +49,7 @@ def test_get_turn_service_wires_dependencies() -> None:
             return_value=store,
         ),
         patch(
-            "api.dependencies.conversations.get_answering_service",
+            "api.dependencies.conversations.get_medical_agent",
             return_value=answering,
         ),
         patch(

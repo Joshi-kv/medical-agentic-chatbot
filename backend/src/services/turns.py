@@ -9,8 +9,8 @@ from uuid import UUID, uuid4
 from services.answering import (
     AnswerCompleted,
     AnswerDelta,
-    AnsweringService,
     AnswerProgress,
+    AnswerProvider,
     AnswerResult,
 )
 from services.conversation import (
@@ -40,6 +40,7 @@ class TurnResult:
     citations: list[CitationRecord]
     sufficient_evidence: bool
     safety_notice: str
+    route: str = "curated_documents"
 
 
 @dataclass(frozen=True)
@@ -53,7 +54,7 @@ class TurnService:
         self,
         conversations: ConversationService,
         store: ConversationStore,
-        answering: AnsweringService,
+        answering: AnswerProvider,
         model_name: str,
     ) -> None:
         self._conversations = conversations
@@ -122,7 +123,7 @@ class TurnService:
                 assistant_message=assistant_message,
                 citations=citations,
                 model=self._model_name,
-                route="curated_documents",
+                route=answer.route,
                 latency_ms=int((monotonic() - started_at) * 1000),
             )
             await self._store.complete_turn(command)
@@ -136,6 +137,7 @@ class TurnService:
             citations=citations,
             sufficient_evidence=answer.sufficient_evidence,
             safety_notice=answer.safety_notice,
+            route=answer.route,
         )
 
     async def stream(
@@ -226,7 +228,7 @@ class TurnService:
                 assistant_message=assistant_message,
                 citations=citations,
                 model=self._model_name,
-                route="curated_documents",
+                route=final_answer.route,
                 latency_ms=int((monotonic() - started_at) * 1000),
             )
 
@@ -256,6 +258,7 @@ class TurnService:
                     "message_id": assistant_message.message_id,
                     "sufficient_evidence": final_answer.sufficient_evidence,
                     "safety_notice": final_answer.safety_notice,
+                    "route": final_answer.route,
                 },
             )
 

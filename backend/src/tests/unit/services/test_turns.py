@@ -86,6 +86,7 @@ async def test_run_turn_persists_answer_and_citations() -> None:
     assert command.tenant_id == "tenant-1"
     assert command.model == "nvidia/test-model"
     assert command.route == "curated_documents"
+    assert result.route == "curated_documents"
     assert command.assistant_message.role == "assistant"
     assert command.citations[0].citation_label == "C1"
     assert result.run_id == "33333333-3333-4333-8333-333333333333"
@@ -237,6 +238,7 @@ async def test_stream_turn_emits_expected_events_and_persists_turn() -> None:
     assert events[5].data["run_id"] == "33333333-3333-4333-8333-333333333333"
     assert events[5].data["sufficient_evidence"] is True
     assert events[5].data["safety_notice"] == "Educational only."
+    assert events[5].data["route"] == "curated_documents"
 
 
 @pytest.mark.anyio
