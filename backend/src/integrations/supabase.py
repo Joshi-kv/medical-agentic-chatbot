@@ -1,12 +1,26 @@
 from collections.abc import Callable
+from functools import lru_cache
 from typing import Any
 
-from supabase import create_client
+from supabase import Client, create_client
 
-from config.settings import Settings
+from config.settings import Settings, get_settings
 from repositories.supabase_documents import SupabaseDocumentStore
 from services.documents import DefaultDocumentService
 from storage.supabase_documents import SupabaseDocumentStorage
+
+
+@lru_cache
+def get_supabase_client() -> Client:
+    settings = get_settings()
+
+    if settings.supabase_url is None or settings.supabase_service_role_key is None:
+        raise ValueError("Supabase URL and Service Role Key must be set")
+
+    return create_client(
+        settings.supabase_url,
+        settings.supabase_service_role_key.get_secret_value(),
+    )
 
 
 def build_document_service(

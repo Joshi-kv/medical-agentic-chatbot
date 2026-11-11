@@ -55,6 +55,8 @@ def authenticate_api_key(
                 "documents:read",
                 "documents:write",
                 "documents:delete",
+                "conversations:read",
+                "conversations:write",
             }
         ),
     )
