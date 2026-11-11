@@ -1,7 +1,11 @@
+import json
+import logging
+from collections.abc import AsyncIterator
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 
 from api.dependencies.conversations import (
     get_conversation_service,
@@ -30,6 +34,12 @@ from services.retrieval import RetrievalServiceError
 from services.turns import InvalidTurnInput, TurnError, TurnService
 
 router = APIRouter(prefix="/v1/conversations", tags=["conversations"])
+logger = logging.getLogger(__name__)
+
+
+def _format_sse(event: str, data: dict[str, object]) -> str:
+    payload = json.dumps(data, default=str)
+    return f"event: {event}\ndata: {payload}\n\n"
 
 
 @router.post(
@@ -59,6 +69,79 @@ async def create_conversation(
     except ConversationError as error:
         raise _unavailable() from error
     return _conversation_response(conversation)
+
+
+@router.post(
+    "/{conversation_id}/turns/stream",
+    response_class=StreamingResponse,
+)
+async def stream_turn(
+    conversation_id: UUID,
+    request: CreateTurnRequest,
+    principal: Annotated[
+        APIPrincipal,
+        Depends(require_scope("conversations:write")),
+    ],
+    service: Annotated[
+        TurnService,
+        Depends(get_turn_service),
+    ],
+) -> StreamingResponse:
+    async def event_stream() -> AsyncIterator[str]:
+        try:
+            async for event in service.stream(
+                conversation_id=str(conversation_id),
+                tenant_id=principal.tenant_id,
+                query=request.query,
+                document_id=request.document_id,
+            ):
+                yield _format_sse(event=event.event, data=event.data)
+        except InvalidTurnInput:
+            yield _format_sse(
+                event="error",
+                data={
+                    "code": "invalid_turn",
+                    "message": "The submitted question is invalid.",
+                    "discard_partial": True,
+                },
+            )
+        except ConversationNotFound:
+            yield _format_sse(
+                event="error",
+                data={
+                    "code": "conversation_not_found",
+                    "message": "Conversation not found.",
+                    "discard_partial": True,
+                },
+            )
+        except (ConversationError, TurnError):
+            yield _format_sse(
+                event="error",
+                data={
+                    "code": "stream_unavailable",
+                    "message": "The answer stream could not be started.",
+                    "discard_partial": True,
+                },
+            )
+        except Exception:
+            logger.exception("Unexpected conversation stream failure")
+            yield _format_sse(
+                event="error",
+                data={
+                    "code": "stream_unavailable",
+                    "message": "The answer stream could not be started.",
+                    "discard_partial": True,
+                },
+            )
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/{conversation_id}", response_model=ConversationResponse)
