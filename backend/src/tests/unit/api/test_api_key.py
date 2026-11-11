@@ -56,7 +56,13 @@ def test_authenticate_api_key_success() -> None:
     assert principal.key_id == "primary-key"
     assert principal.tenant_id == "hospital-xyz"
     assert principal.scopes == frozenset(
-        {"documents:read", "documents:write", "documents:delete"}
+        {
+            "documents:read",
+            "documents:write",
+            "documents:delete",
+            "conversations:read",
+            "conversations:write",
+        }
     )
 
 
