@@ -159,6 +159,7 @@ def test_create_turn_returns_persisted_answer() -> None:
     )
 
     assert response.status_code == status.HTTP_200_OK
+    assert response.json()["route"] == "curated_documents"
     assert response.json()["citations"][0]["citation_label"] == "C1"
     turn_service.run.assert_awaited_once_with(
         conversation_id=CONVERSATION_ID,

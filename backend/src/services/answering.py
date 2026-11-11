@@ -2,6 +2,7 @@ import asyncio
 import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
+from typing import Protocol
 from uuid import UUID
 
 from langchain_core.language_models import BaseChatModel
@@ -31,6 +32,7 @@ class AnswerResult:
     citations: list[Evidence]
     sufficient_evidence: bool
     safety_notice: str
+    route: str = "curated_documents"
 
 
 @dataclass(frozen=True)
@@ -50,6 +52,22 @@ class AnswerCompleted:
 
 
 AnswerStreamItem = AnswerProgress | AnswerDelta | AnswerCompleted
+
+
+class AnswerProvider(Protocol):
+    async def answer(
+        self,
+        query: str,
+        tenant_id: str,
+        document_id: UUID | None = None,
+    ) -> AnswerResult: ...
+
+    def stream_answer(
+        self,
+        query: str,
+        tenant_id: str,
+        document_id: UUID | None = None,
+    ) -> AsyncIterator[AnswerStreamItem]: ...
 
 
 class AnsweringError(Exception):
