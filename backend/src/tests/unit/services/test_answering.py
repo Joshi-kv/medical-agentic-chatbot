@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 
 import pytest
@@ -8,8 +8,11 @@ from langchain_core.messages import AIMessage
 from services.answering import (
     INSUFFICIENT_MESSAGE,
     SAFETY_NOTICE,
+    AnswerCompleted,
+    AnswerDelta,
     AnsweringError,
     AnsweringService,
+    AnswerProgress,
 )
 from services.evidence import Evidence, EvidencePackage
 
@@ -237,9 +240,7 @@ async def test_answer_missing_citations_raises_answering_error() -> None:
         chat_model=chat_model,
     )
 
-    with pytest.raises(
-        AnsweringError, match="Generated answer has no citations."
-    ):
+    with pytest.raises(AnsweringError, match="Generated answer has no citations."):
         await service.answer(query="Query", tenant_id="tenant-1")
 
 
@@ -329,3 +330,131 @@ async def test_answer_forwards_tenant_id_and_document_id() -> None:
         tenant_id="tenant-hospital-9",
         document_id=target_uuid,
     )
+
+
+@pytest.mark.anyio
+async def test_stream_answer_full_lifecycle() -> None:
+    evidence = make_evidence(
+        citation_id="C1",
+        text="Beta blockers reduce heart rate.",
+        title="Cardiology Guide",
+        source="cardiology.pdf",
+        page_number=10,
+    )
+    evidence_service = AsyncMock()
+    evidence_service.collect_evidence.return_value = make_package(items=[evidence])
+
+    async def fake_astream(messages: object):
+        yield SimpleNamespace(content="Beta blockers ")
+        yield SimpleNamespace(content="reduce heart rate [C1].")
+
+    chat_model = AsyncMock()
+    chat_model.astream = MagicMock(side_effect=fake_astream)
+
+    service = AnsweringService(
+        evidence_service=evidence_service,
+        chat_model=chat_model,
+    )
+
+    items = [
+        item
+        async for item in service.stream_answer(
+            query="What do beta blockers do?",
+            tenant_id="tenant-1",
+        )
+    ]
+
+    assert len(items) == 7
+    assert isinstance(items[0], AnswerProgress)
+    assert items[0].stage == "retrieval"
+    assert isinstance(items[1], AnswerProgress)
+    assert "Found 1" in items[1].message
+    assert isinstance(items[2], AnswerProgress)
+    assert items[2].stage == "answering"
+    assert isinstance(items[3], AnswerDelta)
+    assert items[3].text == "Beta blockers "
+    assert isinstance(items[4], AnswerDelta)
+    assert items[4].text == "reduce heart rate [C1]."
+    assert isinstance(items[5], AnswerProgress)
+    assert items[5].stage == "validation"
+    assert isinstance(items[6], AnswerCompleted)
+    assert items[6].result.answer == "Beta blockers reduce heart rate [C1]."
+    assert items[6].result.citations == [evidence]
+    assert items[6].result.sufficient_evidence is True
+
+
+@pytest.mark.anyio
+async def test_stream_answer_insufficient_evidence() -> None:
+    evidence_service = AsyncMock()
+    evidence_service.collect_evidence.return_value = make_package(sufficient=False)
+
+    service = AnsweringService(
+        evidence_service=evidence_service,
+        chat_model=AsyncMock(),
+    )
+
+    items = [
+        item
+        async for item in service.stream_answer(
+            query="Unknown treatment",
+            tenant_id="tenant-1",
+        )
+    ]
+
+    assert len(items) == 3
+    assert isinstance(items[0], AnswerProgress)
+    assert items[0].stage == "retrieval"
+    assert isinstance(items[1], AnswerDelta)
+    assert items[1].text == INSUFFICIENT_MESSAGE
+    assert isinstance(items[2], AnswerCompleted)
+    assert items[2].result.sufficient_evidence is False
+
+
+@pytest.mark.anyio
+async def test_stream_answer_missing_citations_raises_answering_error() -> None:
+    evidence = make_evidence()
+    evidence_service = AsyncMock()
+    evidence_service.collect_evidence.return_value = make_package(items=[evidence])
+
+    async def fake_astream(messages: object):
+        yield SimpleNamespace(content="Beta blockers reduce heart rate.")
+
+    chat_model = AsyncMock()
+    chat_model.astream = MagicMock(side_effect=fake_astream)
+
+    service = AnsweringService(
+        evidence_service=evidence_service,
+        chat_model=chat_model,
+    )
+
+    with pytest.raises(AnsweringError, match="has no citations"):
+        async for _ in service.stream_answer(
+            query="Beta blockers",
+            tenant_id="tenant-1",
+        ):
+            pass
+
+
+@pytest.mark.anyio
+async def test_stream_answer_empty_response_raises_answering_error() -> None:
+    evidence = make_evidence()
+    evidence_service = AsyncMock()
+    evidence_service.collect_evidence.return_value = make_package(items=[evidence])
+
+    async def fake_astream(messages: object):
+        yield SimpleNamespace(content="")
+
+    chat_model = AsyncMock()
+    chat_model.astream = MagicMock(side_effect=fake_astream)
+
+    service = AnsweringService(
+        evidence_service=evidence_service,
+        chat_model=chat_model,
+    )
+
+    with pytest.raises(AnsweringError, match="empty response"):
+        async for _ in service.stream_answer(
+            query="Beta blockers",
+            tenant_id="tenant-1",
+        ):
+            pass

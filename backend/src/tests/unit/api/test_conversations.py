@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock
+from uuid import UUID
 
 from fastapi import FastAPI, status
 from fastapi.testclient import TestClient
@@ -17,7 +18,7 @@ from services.conversation import (
     ConversationService,
     Message,
 )
-from services.turns import TurnResult, TurnService
+from services.turns import TurnError, TurnResult, TurnService, TurnStreamEvent
 
 CONVERSATION_ID = "11111111-1111-4111-8111-111111111111"
 
@@ -43,15 +44,12 @@ def make_client(
 ) -> TestClient:
     app = FastAPI()
     app.include_router(router)
-    app.dependency_overrides[get_conversation_service] = (
-        lambda: conversation_service
-    )
+    app.dependency_overrides[get_conversation_service] = lambda: conversation_service
     app.dependency_overrides[get_turn_service] = lambda: turn_service
     principal = APIPrincipal(
         key_id="key-1",
         tenant_id="tenant-1",
-        scopes=scopes
-        or frozenset({"conversations:read", "conversations:write"}),
+        scopes=scopes or frozenset({"conversations:read", "conversations:write"}),
     )
     app.dependency_overrides[authenticate_api_key] = lambda: principal
     return TestClient(app, raise_server_exceptions=False)
@@ -114,9 +112,7 @@ def test_list_messages_returns_chronological_records() -> None:
     service.list_messages.return_value = [message]
     client = make_client(service, AsyncMock(spec=TurnService))
 
-    response = client.get(
-        f"/v1/conversations/{CONVERSATION_ID}/messages"
-    )
+    response = client.get(f"/v1/conversations/{CONVERSATION_ID}/messages")
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json()[0]["content"] == "What is hypertension?"
@@ -194,3 +190,136 @@ def test_invalid_conversation_uuid_returns_422() -> None:
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
     service.get.assert_not_awaited()
+
+
+def test_stream_turn_returns_event_stream() -> None:
+    conversation_service = AsyncMock(spec=ConversationService)
+    turn_service = AsyncMock(spec=TurnService)
+
+    async def fake_stream(**kwargs: object):
+        yield TurnStreamEvent(
+            event="turn_started",
+            data={"run_id": "run-123"},
+        )
+        yield TurnStreamEvent(
+            event="answer_delta",
+            data={"delta": "Hypertension is high blood pressure."},
+        )
+        yield TurnStreamEvent(
+            event="citations",
+            data={"items": [{"citation_label": "C1", "source": "guide.pdf"}]},
+        )
+        yield TurnStreamEvent(
+            event="turn_completed",
+            data={"run_id": "run-123", "message_id": "msg-123"},
+        )
+
+    turn_service.stream.side_effect = fake_stream
+    client = make_client(conversation_service, turn_service)
+
+    response = client.post(
+        f"/v1/conversations/{CONVERSATION_ID}/turns/stream",
+        json={"query": "What is hypertension?"},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert "text/event-stream" in response.headers["content-type"]
+    assert response.headers["cache-control"] == "no-cache"
+    assert response.headers["x-accel-buffering"] == "no"
+
+    body = response.text
+    assert 'event: turn_started\ndata: {"run_id": "run-123"}\n\n' in body
+    assert (
+        "event: answer_delta\ndata: "
+        '{"delta": "Hypertension is high blood pressure."}\n\n' in body
+    )
+    assert "event: citations\n" in body
+    assert "event: turn_completed\n" in body
+
+    turn_service.stream.assert_called_once_with(
+        conversation_id=CONVERSATION_ID,
+        tenant_id="tenant-1",
+        query="What is hypertension?",
+        document_id=None,
+    )
+
+
+def test_stream_turn_forwards_document_id() -> None:
+    conversation_service = AsyncMock(spec=ConversationService)
+    turn_service = AsyncMock(spec=TurnService)
+
+    async def fake_stream(**kwargs: object):
+        yield TurnStreamEvent(event="turn_started", data={"run_id": "run-123"})
+
+    turn_service.stream.side_effect = fake_stream
+    client = make_client(conversation_service, turn_service)
+    doc_id = "55555555-5555-4555-8555-555555555555"
+
+    response = client.post(
+        f"/v1/conversations/{CONVERSATION_ID}/turns/stream",
+        json={"query": "What is hypertension?", "document_id": doc_id},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    turn_service.stream.assert_called_once_with(
+        conversation_id=CONVERSATION_ID,
+        tenant_id="tenant-1",
+        query="What is hypertension?",
+        document_id=UUID(doc_id),
+    )
+
+
+def test_stream_turn_requires_write_scope() -> None:
+    conversation_service = AsyncMock(spec=ConversationService)
+    turn_service = AsyncMock(spec=TurnService)
+    client = make_client(
+        conversation_service,
+        turn_service,
+        scopes=frozenset({"conversations:read"}),
+    )
+
+    response = client.post(
+        f"/v1/conversations/{CONVERSATION_ID}/turns/stream",
+        json={"query": "What is hypertension?"},
+    )
+
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+    turn_service.stream.assert_not_called()
+
+
+def test_stream_turn_invalid_conversation_uuid_returns_422() -> None:
+    conversation_service = AsyncMock(spec=ConversationService)
+    turn_service = AsyncMock(spec=TurnService)
+    client = make_client(conversation_service, turn_service)
+
+    response = client.post(
+        "/v1/conversations/not-a-uuid/turns/stream",
+        json={"query": "What is hypertension?"},
+    )
+
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+    turn_service.stream.assert_not_called()
+
+
+def test_stream_turn_formats_pre_start_failure_as_sse_error() -> None:
+    conversation_service = AsyncMock(spec=ConversationService)
+    turn_service = AsyncMock(spec=TurnService)
+
+    async def failing_stream(**kwargs: object):
+        if False:
+            yield
+        raise TurnError("database connection details")
+
+    turn_service.stream.side_effect = failing_stream
+    client = make_client(conversation_service, turn_service)
+
+    response = client.post(
+        f"/v1/conversations/{CONVERSATION_ID}/turns/stream",
+        json={"query": "What is hypertension?"},
+    )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert "event: error\n" in response.text
+    assert '"code": "stream_unavailable"' in response.text
+    assert '"discard_partial": true' in response.text
+    assert "database connection details" not in response.text
