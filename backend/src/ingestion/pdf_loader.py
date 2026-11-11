@@ -115,25 +115,3 @@ def _extract_page(
             "image_count": image_count,
         },
     )
-
-
-if __name__ == "__main__":
-    import hashlib
-
-    pdf_path = Path(
-        "/home/joshi/Desktop/personal-projects/medical-agentic-chatbot/backend/data/Medical_Book.pdf"
-    )
-    pdf_bytes = pdf_path.read_bytes()
-
-    source_document = SourceDocument(
-        document_id="123",
-        filename=pdf_path.name,
-        source="test",
-        tenant_id="123",
-        size_bytes=len(pdf_bytes),
-        checksum=hashlib.sha256(pdf_bytes).hexdigest(),
-    )
-
-    pages = load_pdf(document=source_document, file_path=pdf_path)
-
-    print(pages)

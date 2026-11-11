@@ -9,10 +9,6 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
-    google_api_key: str | None = None
-    chat_model: str | None = None
-    vision_model: str | None = None
-
     nvidia_api_key: SecretStr | None = None
     nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
     embedding_model: str = "nvidia/nemotron-3.5-embed-1b"

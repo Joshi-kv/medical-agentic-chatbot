@@ -266,7 +266,7 @@ class TurnService:
             )
             raise
 
-        except Exception as error:
+        except Exception:
             logger.exception(
                 "Conversation turn stream failed",
                 extra={"run_id": started_turn.run_id},
@@ -280,7 +280,7 @@ class TurnService:
                 event="error",
                 data={
                     "code": "turn_failed",
-                    "message": f"The answer could not be completed. {error}",
+                    "message": "The answer could not be completed.",
                     "discard_partial": True,
                 },
             )
