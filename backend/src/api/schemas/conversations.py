@@ -43,6 +43,7 @@ class TurnResponse(BaseModel):
     message_id: str
     answer: str
     route: str
+    review_case_id: str | None
     citations: list[CitationResponse]
     sufficient_evidence: bool
     safety_notice: str

@@ -20,6 +20,7 @@ from services.conversation import (
     ConversationStore,
     Message,
 )
+from services.human_review import HumanReviewCase, HumanReviewService
 
 MAX_TURN_QUERY_LENGTH = 2000
 logger = logging.getLogger(__name__)
@@ -41,6 +42,7 @@ class TurnResult:
     sufficient_evidence: bool
     safety_notice: str
     route: str = "curated_documents"
+    review_case_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -56,11 +58,13 @@ class TurnService:
         store: ConversationStore,
         answering: AnswerProvider,
         model_name: str,
+        human_review: HumanReviewService | None = None,
     ) -> None:
         self._conversations = conversations
         self._store = store
         self._answering = answering
         self._model_name = model_name
+        self._human_review = human_review
 
     async def run(
         self,
@@ -93,6 +97,13 @@ class TurnService:
                 query=normalized_query,
                 tenant_id=tenant_id,
                 document_id=document_id,
+            )
+            review_case = await self._create_review_case(
+                route=answer.route,
+                tenant_id=tenant_id,
+                conversation_id=conversation_id,
+                run_id=started_turn.run_id,
+                query=normalized_query,
             )
 
             assistant_message = Message(
@@ -138,6 +149,7 @@ class TurnService:
             sufficient_evidence=answer.sufficient_evidence,
             safety_notice=answer.safety_notice,
             route=answer.route,
+            review_case_id=(review_case.case_id if review_case is not None else None),
         )
 
     async def stream(
@@ -197,6 +209,14 @@ class TurnService:
 
             if final_answer is None:
                 raise TurnError("Answer stream ended without a result.")
+
+            review_case = await self._create_review_case(
+                route=final_answer.route,
+                tenant_id=tenant_id,
+                conversation_id=conversation_id,
+                run_id=started_turn.run_id,
+                query=normalized_query,
+            )
 
             assistant_message = Message(
                 message_id=str(uuid4()),
@@ -259,6 +279,9 @@ class TurnService:
                     "sufficient_evidence": final_answer.sufficient_evidence,
                     "safety_notice": final_answer.safety_notice,
                     "route": final_answer.route,
+                    "review_case_id": (
+                        review_case.case_id if review_case is not None else None
+                    ),
                 },
             )
 
@@ -287,6 +310,28 @@ class TurnService:
                     "discard_partial": True,
                 },
             )
+
+    async def _create_review_case(
+        self,
+        route: str,
+        tenant_id: str,
+        conversation_id: str,
+        run_id: str,
+        query: str,
+    ) -> HumanReviewCase | None:
+        if route != "human_review":
+            return None
+
+        if self._human_review is None:
+            raise TurnError("Human-review service is unavailable.")
+
+        return await self._human_review.request_review(
+            tenant_id=tenant_id,
+            conversation_id=conversation_id,
+            run_id=run_id,
+            query=query,
+            review_type="clinical",
+        )
 
     async def _fail_quietly(self, run_id: str, tenant_id: str) -> None:
         try:

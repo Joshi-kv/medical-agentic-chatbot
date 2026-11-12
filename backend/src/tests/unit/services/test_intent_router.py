@@ -50,6 +50,30 @@ async def test_empty_message_does_not_call_model() -> None:
 
 
 @pytest.mark.anyio
+async def test_one_word_message_asks_for_clarification_without_model() -> None:
+    model = AsyncMock()
+    router = IntentRouter(chat_model=model)
+
+    result = await router.classify("Help")
+
+    assert result.route == AgentRoute.CLARIFICATION
+    assert result.follow_up_question is not None
+    model.ainvoke.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_explicit_appointment_request_does_not_depend_on_model() -> None:
+    model = AsyncMock()
+    router = IntentRouter(chat_model=model)
+
+    result = await router.classify("I want to schedule an appointment.")
+
+    assert result.route == AgentRoute.APPOINTMENT_REQUEST
+    assert result.confidence == 1
+    model.ainvoke.assert_not_awaited()
+
+
+@pytest.mark.anyio
 async def test_invalid_model_response_fails_closed() -> None:
     model = AsyncMock()
     model.ainvoke.return_value = AIMessage(content="not json")

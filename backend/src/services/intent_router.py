@@ -39,6 +39,26 @@ class IntentRouter:
         if not normalized_message:
             return self._clarification("What would you like help with?", confidence=1)
 
+        if len(normalized_message.split()) == 1:
+            return self._clarification(
+                "Could you tell me what you need help with?",
+                confidence=1,
+            )
+
+        appointment_phrases = (
+            "schedule an appointment",
+            "book an appointment",
+            "reschedule my appointment",
+            "cancel my appointment",
+        )
+        if any(
+            phrase in normalized_message.casefold() for phrase in appointment_phrases
+        ):
+            return RouteDecision(
+                route=AgentRoute.APPOINTMENT_REQUEST,
+                confidence=1,
+            )
+
         prompt = ROUTER_USER_PROMPT.format(
             message=normalized_message,
             format_instructions=self._parser.get_format_instructions(),

@@ -1,6 +1,10 @@
 import pytest
 
-from guardrails.emergency import EmergencyGuardrail, EmergencyRule
+from guardrails.emergency import (
+    DEFAULT_EMERGENCY_RULES,
+    EmergencyGuardrail,
+    EmergencyRule,
+)
 from guardrails.models import SafetyAction
 
 
@@ -30,6 +34,15 @@ def test_safe_message_can_continue(guardrail: EmergencyGuardrail) -> None:
     assert result.action == SafetyAction.CONTINUE
     assert result.reason is None
     assert result.response is None
+
+
+def test_default_rules_catch_immediate_danger_symptoms() -> None:
+    guardrail = EmergencyGuardrail(DEFAULT_EMERGENCY_RULES)
+
+    result = guardrail.evaluate("I have severe chest pain and cannot breathe.")
+
+    assert result.action == SafetyAction.EMERGENCY
+    assert result.reason == "immediate_danger_symptoms"
 
 
 def test_rules_are_required() -> None:

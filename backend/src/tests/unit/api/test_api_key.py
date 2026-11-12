@@ -10,6 +10,7 @@ from api.security.api_key import (
     APIPrincipal,
     AuthenticatedPrincipal,
     authenticate_api_key,
+    authenticate_staff_api_key,
 )
 from config.settings import Settings, get_settings
 
@@ -207,3 +208,57 @@ def test_http_scoped_endpoint_with_insufficient_scope(
         "code": "insufficient_scope",
         "message": "The credential cannot perform this action.",
     }
+
+
+def test_authenticate_staff_api_key_success() -> None:
+    settings = make_mock_settings()
+    settings.staff_api_key = SecretStr("valid-staff-secret")
+    settings.staff_api_key_id = "staff-key-1"
+
+    principal = authenticate_staff_api_key(
+        provided_key="valid-staff-secret",
+        settings=settings,
+    )
+
+    assert isinstance(principal, APIPrincipal)
+    assert principal.key_id == "staff-key-1"
+    assert principal.tenant_id == "tenant-test"
+    assert principal.scopes == frozenset(
+        {
+            "human_review:read",
+            "human_review:write",
+        }
+    )
+
+
+def test_authenticate_staff_api_key_unconfigured_raises_503() -> None:
+    settings = make_mock_settings()
+    settings.staff_api_key = None
+
+    with pytest.raises(HTTPException) as exc_info:
+        authenticate_staff_api_key(
+            provided_key="some-key",
+            settings=settings,
+        )
+
+    assert exc_info.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert exc_info.value.detail["code"] == "staff_auth_unavailable"
+
+
+@pytest.mark.parametrize("invalid_key", [None, "wrong-key", ""])
+def test_authenticate_staff_api_key_invalid_raises_401(
+    invalid_key: str | None,
+) -> None:
+    settings = make_mock_settings()
+    settings.staff_api_key = SecretStr("valid-staff-secret")
+    settings.staff_api_key_id = "staff-key-1"
+
+    with pytest.raises(HTTPException) as exc_info:
+        authenticate_staff_api_key(
+            provided_key=invalid_key,
+            settings=settings,
+        )
+
+    assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
+    assert exc_info.value.detail["code"] == "invalid_staff_api_key"
+    assert exc_info.value.headers == {"WWW-Authenticate": "ApiKey"}

@@ -37,6 +37,7 @@ def test_get_turn_service_wires_dependencies() -> None:
     conversation_service = MagicMock(spec=ConversationService)
     store = MagicMock(spec=SupabaseConversationStore)
     answering = MagicMock()
+    human_review = MagicMock()
     settings = SimpleNamespace(nvidia_chat_model="nvidia/test-model")
 
     with (
@@ -53,6 +54,10 @@ def test_get_turn_service_wires_dependencies() -> None:
             return_value=answering,
         ),
         patch(
+            "api.dependencies.conversations.get_human_review_service",
+            return_value=human_review,
+        ),
+        patch(
             "api.dependencies.conversations.get_settings",
             return_value=settings,
         ),
@@ -64,5 +69,6 @@ def test_get_turn_service_wires_dependencies() -> None:
         assert service._conversations is conversation_service
         assert service._store is store
         assert service._answering is answering
+        assert service._human_review is human_review
         assert service._model_name == "nvidia/test-model"
     clear_caches()

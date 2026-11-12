@@ -14,6 +14,13 @@ api_key_header = APIKeyHeader(
     auto_error=False,
 )
 
+staff_api_key_header = APIKeyHeader(
+    name="X-Staff-API-Key",
+    scheme_name="StaffApiKeyAuth",
+    description="Staff API key required for human-review operations.",
+    auto_error=False,
+)
+
 
 class APIPrincipal(BaseModel):
     """Server trusted identity with an API Key."""
@@ -62,7 +69,56 @@ def authenticate_api_key(
     )
 
 
+def authenticate_staff_api_key(
+    provided_key: Annotated[str | None, Security(staff_api_key_header)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> APIPrincipal:
+    configured_key = settings.staff_api_key
+
+    if configured_key is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "staff_auth_unavailable",
+                "message": "Staff authentication is not configured.",
+            },
+        )
+
+    expected_key = configured_key.get_secret_value()
+
+    if (
+        provided_key is None
+        or not expected_key
+        or not compare_digest(provided_key, expected_key)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "code": "invalid_staff_api_key",
+                "message": "Invalid or missing staff API key.",
+            },
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+
+    return APIPrincipal(
+        key_id=settings.staff_api_key_id,
+        tenant_id=settings.api_key_tenant_id,
+        scopes=frozenset(
+            {
+                "human_review:read",
+                "human_review:write",
+            }
+        ),
+    )
+
+
 AuthenticatedPrincipal = Annotated[
     APIPrincipal,
     Depends(authenticate_api_key),
+]
+
+
+StaffPrincipal = Annotated[
+    APIPrincipal,
+    Depends(authenticate_staff_api_key),
 ]
