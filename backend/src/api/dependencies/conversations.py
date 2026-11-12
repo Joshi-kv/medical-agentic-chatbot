@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from api.dependencies.human_review import get_human_review_service
 from api.dependencies.medical_agent import get_medical_agent
 from config.settings import get_settings
 from integrations.supabase import get_supabase_client
@@ -29,4 +30,5 @@ def get_turn_service() -> TurnService:
         store=get_conversation_store(),
         answering=get_medical_agent(),
         model_name=settings.nvidia_chat_model,
+        human_review=get_human_review_service(),
     )

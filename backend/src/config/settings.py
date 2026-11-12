@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     ingestion_api_key: SecretStr
     api_key_tenant_id: str
     api_key_id: str = "primary"
+    staff_api_key: SecretStr | None = None
+    staff_api_key_id: str = "staff-primary"
 
     supabase_url: str | None = None
     supabase_service_role_key: SecretStr | None = None

@@ -4,6 +4,7 @@ from api.routers.answering import router as answering_router
 from api.routers.conversations import router as conversations_router
 from api.routers.documents import router as documents_router
 from api.routers.health import router as health_router
+from api.routers.human_review import router as human_review_router
 from api.routers.retrieval import router as retrieval_router
 from lifespan import lifespan
 
@@ -19,3 +20,4 @@ app.include_router(documents_router)
 app.include_router(retrieval_router)
 app.include_router(answering_router)
 app.include_router(conversations_router)
+app.include_router(human_review_router)

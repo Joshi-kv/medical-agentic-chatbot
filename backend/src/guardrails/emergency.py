@@ -24,6 +24,16 @@ DEFAULT_EMERGENCY_RULES = (
             "need emergency help",
         ),
     ),
+    EmergencyRule(
+        name="immediate_danger_symptoms",
+        phrases=(
+            "severe chest pain",
+            "cannot breathe",
+            "can't breathe",
+            "not breathing",
+            "unconscious",
+        ),
+    ),
 )
 
 

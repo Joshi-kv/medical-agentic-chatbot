@@ -1,5 +1,6 @@
 import asyncio
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 
@@ -92,6 +93,36 @@ async def test_run_turn_persists_answer_and_citations() -> None:
     assert result.run_id == "33333333-3333-4333-8333-333333333333"
     assert result.message.content.endswith("[C1].")
     assert result.citations == command.citations
+
+
+@pytest.mark.anyio
+async def test_human_review_route_creates_case() -> None:
+    service, _, _, answering = make_service()
+    human_review = AsyncMock()
+    human_review.request_review.return_value = SimpleNamespace(case_id="case-1")
+    service._human_review = human_review
+    answering.answer.return_value = AnswerResult(
+        answer="This request needs staff review.",
+        citations=[],
+        sufficient_evidence=False,
+        safety_notice="Educational only.",
+        route="human_review",
+    )
+
+    result = await service.run(
+        conversation_id="11111111-1111-4111-8111-111111111111",
+        tenant_id="tenant-1",
+        query="Should I stop my prescription?",
+    )
+
+    assert result.review_case_id == "case-1"
+    human_review.request_review.assert_awaited_once_with(
+        tenant_id="tenant-1",
+        conversation_id="11111111-1111-4111-8111-111111111111",
+        run_id="33333333-3333-4333-8333-333333333333",
+        query="Should I stop my prescription?",
+        review_type="clinical",
+    )
 
 
 @pytest.mark.anyio
@@ -239,6 +270,41 @@ async def test_stream_turn_emits_expected_events_and_persists_turn() -> None:
     assert events[5].data["sufficient_evidence"] is True
     assert events[5].data["safety_notice"] == "Educational only."
     assert events[5].data["route"] == "curated_documents"
+    assert events[5].data["review_case_id"] is None
+
+
+@pytest.mark.anyio
+async def test_human_review_stream_returns_case_id() -> None:
+    service, _, _, answering = make_service()
+    human_review = AsyncMock()
+    human_review.request_review.return_value = SimpleNamespace(case_id="case-1")
+    service._human_review = human_review
+    answer_result = AnswerResult(
+        answer="This request needs staff review.",
+        citations=[],
+        sufficient_evidence=False,
+        safety_notice="Educational only.",
+        route="human_review",
+    )
+
+    async def fake_answering_stream(**kwargs: object):
+        yield AnswerCompleted(result=answer_result)
+
+    answering.stream_answer = MagicMock(side_effect=fake_answering_stream)
+
+    events = [
+        event
+        async for event in service.stream(
+            conversation_id="11111111-1111-4111-8111-111111111111",
+            tenant_id="tenant-1",
+            query="Should I stop my prescription?",
+        )
+    ]
+
+    completed = events[-1]
+    assert completed.event == "turn_completed"
+    assert completed.data["route"] == "human_review"
+    assert completed.data["review_case_id"] == "case-1"
 
 
 @pytest.mark.anyio
