@@ -269,6 +269,25 @@ async def test_resolve_case_success() -> None:
 
 
 @pytest.mark.anyio
+async def test_resolve_same_decision_is_idempotent() -> None:
+    store = AsyncMock()
+    existing = make_case(status="resolved", decision="approved")
+    store.resolve_case.return_value = None
+    store.get_case.return_value = existing
+    service = HumanReviewService(store=store)
+
+    result = await service.resolve(
+        case_id=CASE_ID,
+        tenant_id="tenant-1",
+        staff_id="staff-1",
+        decision="approved",
+        resolution={},
+    )
+
+    assert result is existing
+
+
+@pytest.mark.anyio
 async def test_resolve_case_rejects_invalid_decision() -> None:
     store = AsyncMock()
     service = HumanReviewService(store=store)

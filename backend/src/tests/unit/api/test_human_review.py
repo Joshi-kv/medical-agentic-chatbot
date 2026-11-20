@@ -5,6 +5,7 @@ from fastapi import FastAPI, status
 from fastapi.testclient import TestClient
 
 from api.dependencies.human_review import get_human_review_service
+from api.dependencies.review_resolution import get_review_resolution_service
 from api.routers.human_review import router
 from api.security.api_key import (
     APIPrincipal,
@@ -64,6 +65,7 @@ def make_client(
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_human_review_service] = lambda: service
+    app.dependency_overrides[get_review_resolution_service] = lambda: service
 
     default_staff = staff_principal or APIPrincipal(
         key_id="staff-1",

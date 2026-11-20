@@ -33,6 +33,7 @@ class AnswerResult:
     sufficient_evidence: bool
     safety_notice: str
     route: str = "curated_documents"
+    review_case_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -60,6 +61,8 @@ class AnswerProvider(Protocol):
         query: str,
         tenant_id: str,
         document_id: UUID | None = None,
+        conversation_id: str | None = None,
+        run_id: str | None = None,
     ) -> AnswerResult: ...
 
     def stream_answer(
@@ -67,6 +70,8 @@ class AnswerProvider(Protocol):
         query: str,
         tenant_id: str,
         document_id: UUID | None = None,
+        conversation_id: str | None = None,
+        run_id: str | None = None,
     ) -> AsyncIterator[AnswerStreamItem]: ...
 
 
@@ -88,6 +93,8 @@ class AnsweringService:
         query: str,
         tenant_id: str,
         document_id: UUID | None = None,
+        conversation_id: str | None = None,
+        run_id: str | None = None,
     ) -> AnswerResult:
         """
         Answer the query based on the evidence.
@@ -155,6 +162,8 @@ class AnsweringService:
         query: str,
         tenant_id: str,
         document_id: UUID | None = None,
+        conversation_id: str | None = None,
+        run_id: str | None = None,
     ) -> AsyncIterator[AnswerStreamItem]:
         yield AnswerProgress(
             stage="retrieval",

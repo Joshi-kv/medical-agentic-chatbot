@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from api.dependencies.human_review import get_human_review_service
+from api.dependencies.review_resolution import get_review_resolution_service
 from api.dependencies.security import require_scope
 from api.schemas.human_review import (
     HumanReviewCaseResponse,
@@ -20,6 +21,7 @@ from services.human_review import (
     InvalidHumanReviewInput,
     ReviewStatus,
 )
+from services.review_resolution import ReviewResolutionService
 
 router = APIRouter(
     prefix="/v1/human-review/cases",
@@ -111,8 +113,8 @@ async def resolve_review_case(
     request: ResolveHumanReviewRequest,
     principal: StaffPrincipal,
     service: Annotated[
-        HumanReviewService,
-        Depends(get_human_review_service),
+        ReviewResolutionService,
+        Depends(get_review_resolution_service),
     ],
 ) -> HumanReviewCaseResponse:
     try:
