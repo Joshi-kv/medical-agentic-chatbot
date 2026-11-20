@@ -7,6 +7,7 @@ from services.medical_agent import MedicalAgent
 def test_get_medical_agent_wires_services() -> None:
     model = MagicMock()
     answering = MagicMock()
+    appointment_graph = MagicMock()
 
     with (
         patch(
@@ -18,11 +19,9 @@ def test_get_medical_agent_wires_services() -> None:
             return_value=answering,
         ),
     ):
-        get_medical_agent.cache_clear()
-        agent = get_medical_agent()
+        agent = get_medical_agent(appointment_graph=appointment_graph)
 
         assert isinstance(agent, MedicalAgent)
         assert agent._intent_router._chat_model is model
         assert agent._answering_service is answering
-
-    get_medical_agent.cache_clear()
+        assert agent._appointment_workflow._graph is appointment_graph

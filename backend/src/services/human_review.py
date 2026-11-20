@@ -243,6 +243,13 @@ class HumanReviewService:
         if case is None:
             existing = await self.get(case_id, tenant_id)
 
+            if (
+                existing.status in {"resolved", "rejected"}
+                and existing.decision == decision
+                and existing.resolved_by == staff_id
+            ):
+                return existing
+
             if existing.status == "claimed":
                 raise HumanReviewConflict(
                     "Only the staff member who claimed the case can resolve it."

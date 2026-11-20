@@ -12,7 +12,6 @@ from services.turns import TurnService
 
 
 def clear_caches() -> None:
-    get_turn_service.cache_clear()
     get_conversation_service.cache_clear()
     get_conversation_store.cache_clear()
 
@@ -50,10 +49,6 @@ def test_get_turn_service_wires_dependencies() -> None:
             return_value=store,
         ),
         patch(
-            "api.dependencies.conversations.get_medical_agent",
-            return_value=answering,
-        ),
-        patch(
             "api.dependencies.conversations.get_human_review_service",
             return_value=human_review,
         ),
@@ -63,7 +58,7 @@ def test_get_turn_service_wires_dependencies() -> None:
         ),
     ):
         clear_caches()
-        service = get_turn_service()
+        service = get_turn_service(medical_agent=answering)
 
         assert isinstance(service, TurnService)
         assert service._conversations is conversation_service

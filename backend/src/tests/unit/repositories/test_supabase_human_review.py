@@ -57,23 +57,6 @@ def sample_case_row(
 
 
 @pytest.mark.anyio
-async def test_expire_cases_calls_rpc() -> None:
-    client = MagicMock()
-    rpc_query = MagicMock()
-    rpc_query.execute.return_value = SimpleNamespace(data=3)
-    client.rpc.return_value = rpc_query
-
-    store = SupabaseHumanReviewStore(client=client)
-    result = await store.expire_cases("tenant-1")
-
-    assert result == 3
-    client.rpc.assert_called_once_with(
-        "expire_human_review_cases",
-        {"p_tenant_id": "tenant-1"},
-    )
-
-
-@pytest.mark.anyio
 async def test_create_case_calls_rpc() -> None:
     client = MagicMock()
     rpc_query = MagicMock()

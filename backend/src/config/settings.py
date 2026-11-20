@@ -17,6 +17,13 @@ class Settings(BaseSettings):
     embedding_timeout_seconds: float = Field(default=120, gt=0, le=600)
     nvidia_chat_model: str | None = None
 
+    langsmith_tracing: bool = False
+    langsmith_api_key: SecretStr | None = None
+    langsmith_project: str = "medical-agentic-chatbot"
+    langsmith_endpoint: str = "https://api.smith.langchain.com"
+    langsmith_hide_inputs: bool = True
+    langsmith_hide_outputs: bool = True
+
     tavily_api_key: str
 
     pinecone_api_key: str
@@ -32,6 +39,7 @@ class Settings(BaseSettings):
     staff_api_key_id: str = "staff-primary"
 
     supabase_url: str | None = None
+    supabase_database_url: SecretStr | None = None
     supabase_service_role_key: SecretStr | None = None
     supabase_document_bucket: str = "medical-documents"
     max_upload_bytes: int = 20 * 1024 * 1024

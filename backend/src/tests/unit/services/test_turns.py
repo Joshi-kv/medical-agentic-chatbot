@@ -82,6 +82,8 @@ async def test_run_turn_persists_answer_and_citations() -> None:
         query="What is hypertension?",
         tenant_id="tenant-1",
         document_id=document_id,
+        conversation_id="11111111-1111-4111-8111-111111111111",
+        run_id="33333333-3333-4333-8333-333333333333",
     )
     command = store.complete_turn.await_args.args[0]
     assert command.tenant_id == "tenant-1"
@@ -123,6 +125,27 @@ async def test_human_review_route_creates_case() -> None:
         query="Should I stop my prescription?",
         review_type="clinical",
     )
+
+
+@pytest.mark.anyio
+async def test_appointment_review_case_is_returned() -> None:
+    service, _, _, answering = make_service()
+    answering.answer.return_value = AnswerResult(
+        answer="Sent to hospital staff for review.",
+        citations=[],
+        sufficient_evidence=False,
+        safety_notice="Educational only.",
+        route="appointment_request",
+        review_case_id="case-appointment-1",
+    )
+
+    result = await service.run(
+        conversation_id="11111111-1111-4111-8111-111111111111",
+        tenant_id="tenant-1",
+        query="Yes, I consent.",
+    )
+
+    assert result.review_case_id == "case-appointment-1"
 
 
 @pytest.mark.anyio
@@ -244,6 +267,8 @@ async def test_stream_turn_emits_expected_events_and_persists_turn() -> None:
         query="What is hypertension?",
         tenant_id="tenant-1",
         document_id=document_id,
+        conversation_id="11111111-1111-4111-8111-111111111111",
+        run_id="33333333-3333-4333-8333-333333333333",
     )
     store.complete_turn.assert_awaited_once()
 

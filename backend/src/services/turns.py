@@ -97,6 +97,8 @@ class TurnService:
                 query=normalized_query,
                 tenant_id=tenant_id,
                 document_id=document_id,
+                conversation_id=conversation_id,
+                run_id=started_turn.run_id,
             )
             review_case = await self._create_review_case(
                 route=answer.route,
@@ -105,6 +107,9 @@ class TurnService:
                 run_id=started_turn.run_id,
                 query=normalized_query,
             )
+            review_case_id = answer.review_case_id
+            if review_case is not None:
+                review_case_id = review_case.case_id
 
             assistant_message = Message(
                 message_id=str(uuid4()),
@@ -149,7 +154,7 @@ class TurnService:
             sufficient_evidence=answer.sufficient_evidence,
             safety_notice=answer.safety_notice,
             route=answer.route,
-            review_case_id=(review_case.case_id if review_case is not None else None),
+            review_case_id=review_case_id,
         )
 
     async def stream(
@@ -190,6 +195,8 @@ class TurnService:
                 query=normalized_query,
                 tenant_id=tenant_id,
                 document_id=document_id,
+                conversation_id=conversation_id,
+                run_id=started_turn.run_id,
             ):
                 if isinstance(item, AnswerProgress):
                     yield TurnStreamEvent(
@@ -217,6 +224,9 @@ class TurnService:
                 run_id=started_turn.run_id,
                 query=normalized_query,
             )
+            review_case_id = final_answer.review_case_id
+            if review_case is not None:
+                review_case_id = review_case.case_id
 
             assistant_message = Message(
                 message_id=str(uuid4()),
@@ -279,9 +289,7 @@ class TurnService:
                     "sufficient_evidence": final_answer.sufficient_evidence,
                     "safety_notice": final_answer.safety_notice,
                     "route": final_answer.route,
-                    "review_case_id": (
-                        review_case.case_id if review_case is not None else None
-                    ),
+                    "review_case_id": review_case_id,
                 },
             )
 

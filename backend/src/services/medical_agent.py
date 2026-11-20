@@ -12,20 +12,22 @@ from services.answering import (
     AnswerResult,
     AnswerStreamItem,
 )
+from services.appointment_workflow import (
+    AppointmentWorkflow,
+    AppointmentWorkflowError,
+)
 from services.intent_router import IntentRouter, IntentRouterError
 
 HOSPITAL_NAVIGATION_MESSAGE = (
     "I can help you find the appropriate hospital service. "
     "Which hospital location or department are you looking for?"
 )
-APPOINTMENT_MESSAGE = (
-    "I can help collect information for an appointment request. "
-    "Which department or type of care do you need?"
-)
+
 HUMAN_REVIEW_MESSAGE = (
     "This request needs review by qualified hospital staff. "
     "I can help collect the details needed for a handoff."
 )
+
 ROUTING_FAILURE_MESSAGE = (
     "I couldn't safely determine how to handle this request. "
     "Please provide more information or ask for hospital staff assistance."
@@ -38,22 +40,38 @@ class MedicalAgent:
         emergency_guardrail: EmergencyGuardrail,
         intent_router: IntentRouter,
         answering_service: AnsweringService,
+        appointment_workflow: AppointmentWorkflow,
     ) -> None:
         self._emergency_guardrail = emergency_guardrail
         self._intent_router = intent_router
         self._answering_service = answering_service
+        self._appointment_workflow = appointment_workflow
 
     async def answer(
         self,
         query: str,
         tenant_id: str,
         document_id: UUID | None = None,
+        conversation_id: str | None = None,
+        run_id: str | None = None,
     ) -> AnswerResult:
         safety = self._emergency_guardrail.evaluate(query)
+
         if safety.action == SafetyAction.EMERGENCY:
             return self._static_result(
-                message=safety.response or "Seek emergency medical help now.",
+                message=(safety.response or "Seek emergency medical help now."),
                 route="emergency",
+            )
+
+        if await self._has_active_appointment(
+            tenant_id=tenant_id,
+            conversation_id=conversation_id,
+        ):
+            return await self._run_appointment(
+                query=query,
+                tenant_id=tenant_id,
+                conversation_id=conversation_id,
+                run_id=run_id,
             )
 
         try:
@@ -71,22 +89,61 @@ class MedicalAgent:
                 document_id=document_id,
             )
 
-        return self._result_for_route(decision.route, decision.follow_up_question)
+        if decision.route == AgentRoute.APPOINTMENT_REQUEST:
+            return await self._run_appointment(
+                query=query,
+                tenant_id=tenant_id,
+                conversation_id=conversation_id,
+                run_id=run_id,
+            )
+
+        return self._result_for_route(
+            route=decision.route,
+            follow_up_question=decision.follow_up_question,
+        )
 
     async def stream_answer(
         self,
         query: str,
         tenant_id: str,
         document_id: UUID | None = None,
+        conversation_id: str | None = None,
+        run_id: str | None = None,
     ) -> AsyncIterator[AnswerStreamItem]:
-        yield AnswerProgress(stage="safety", message="Checking safety requirements...")
+        yield AnswerProgress(
+            stage="safety",
+            message="Checking safety requirements...",
+        )
 
         safety = self._emergency_guardrail.evaluate(query)
+
         if safety.action == SafetyAction.EMERGENCY:
             result = self._static_result(
-                message=safety.response or "Seek emergency medical help now.",
+                message=(safety.response or "Seek emergency medical help now."),
                 route="emergency",
             )
+            yield AnswerDelta(text=result.answer)
+            yield AnswerCompleted(result=result)
+            return
+
+        active_appointment = await self._has_active_appointment(
+            tenant_id=tenant_id,
+            conversation_id=conversation_id,
+        )
+
+        if active_appointment:
+            yield AnswerProgress(
+                stage="appointment",
+                message="Continuing your appointment request...",
+            )
+
+            result = await self._run_appointment(
+                query=query,
+                tenant_id=tenant_id,
+                conversation_id=conversation_id,
+                run_id=run_id,
+            )
+
             yield AnswerDelta(text=result.answer)
             yield AnswerCompleted(result=result)
             return
@@ -112,13 +169,59 @@ class MedicalAgent:
                 ):
                     yield event
                 return
-            result = self._result_for_route(
-                decision.route,
-                decision.follow_up_question,
-            )
+
+            if decision.route == AgentRoute.APPOINTMENT_REQUEST:
+                yield AnswerProgress(
+                    stage="appointment",
+                    message="Starting your appointment request...",
+                )
+
+                result = await self._run_appointment(
+                    query=query,
+                    tenant_id=tenant_id,
+                    conversation_id=conversation_id,
+                    run_id=run_id,
+                )
+            else:
+                result = self._result_for_route(
+                    route=decision.route,
+                    follow_up_question=decision.follow_up_question,
+                )
 
         yield AnswerDelta(text=result.answer)
         yield AnswerCompleted(result=result)
+
+    async def _has_active_appointment(
+        self,
+        tenant_id: str,
+        conversation_id: str | None,
+    ) -> bool:
+        if conversation_id is None:
+            return False
+
+        return await self._appointment_workflow.has_active_request(
+            tenant_id=tenant_id,
+            conversation_id=conversation_id,
+        )
+
+    async def _run_appointment(
+        self,
+        query: str,
+        tenant_id: str,
+        conversation_id: str | None,
+        run_id: str | None,
+    ) -> AnswerResult:
+        if conversation_id is None or run_id is None:
+            raise AppointmentWorkflowError(
+                "Conversation and run IDs are required for appointment requests."
+            )
+
+        return await self._appointment_workflow.run(
+            tenant_id=tenant_id,
+            conversation_id=conversation_id,
+            run_id=run_id,
+            query=query,
+        )
 
     def _result_for_route(
         self,
@@ -129,14 +232,19 @@ class MedicalAgent:
             message = follow_up_question or "Could you provide more information?"
         elif route == AgentRoute.HOSPITAL_NAVIGATION:
             message = HOSPITAL_NAVIGATION_MESSAGE
-        elif route == AgentRoute.APPOINTMENT_REQUEST:
-            message = APPOINTMENT_MESSAGE
         else:
             message = HUMAN_REVIEW_MESSAGE
 
-        return self._static_result(message=message, route=route)
+        return self._static_result(
+            message=message,
+            route=route,
+        )
 
-    def _static_result(self, message: str, route: str) -> AnswerResult:
+    def _static_result(
+        self,
+        message: str,
+        route: str,
+    ) -> AnswerResult:
         return AnswerResult(
             answer=message,
             citations=[],
