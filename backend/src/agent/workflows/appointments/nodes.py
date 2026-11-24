@@ -2,7 +2,7 @@ from typing import Literal
 
 from langgraph.types import interrupt
 
-from agent.state import MedicalAgentState
+from agent.workflows.appointments.state import MedicalAgentState
 from services.appointment_extractor import AppointmentExtractor
 from services.appointments import (
     AppointmentConflict,

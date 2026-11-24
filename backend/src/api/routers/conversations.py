@@ -270,6 +270,17 @@ def _message_response(message: Message) -> MessageResponse:
         role=message.role,
         content=message.content,
         created_at=message.created_at,
+        citations=[
+            CitationResponse(
+                citation_label=citation.citation_label,
+                document_id=citation.document_id,
+                chunk_id=citation.chunk_id,
+                page_number=citation.page_number,
+                source=citation.source,
+                title=citation.title,
+            )
+            for citation in message.citations
+        ],
     )
 
 

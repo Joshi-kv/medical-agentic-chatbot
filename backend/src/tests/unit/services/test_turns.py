@@ -13,6 +13,7 @@ from services.answering import (
     AnswerResult,
 )
 from services.conversation import Message, StartedTurn
+from services.conversation_context import ContextMessage
 from services.evidence import Evidence
 from services.turns import InvalidTurnInput, TurnError, TurnService
 
@@ -34,6 +35,7 @@ def make_started_turn() -> StartedTurn:
 
 def make_service() -> tuple[TurnService, AsyncMock, AsyncMock, AsyncMock]:
     conversations = AsyncMock()
+    conversations.list_recent_messages.return_value = []
     store = AsyncMock()
     store.start_turn.return_value = make_started_turn()
     answering = AsyncMock()
@@ -75,10 +77,11 @@ async def test_run_turn_persists_answer_and_citations() -> None:
         document_id=document_id,
     )
 
-    conversations.get.assert_awaited_once_with(
-        "11111111-1111-4111-8111-111111111111",
-        "tenant-1",
-        "actor-1",
+    conversations.list_recent_messages.assert_awaited_once_with(
+        conversation_id="11111111-1111-4111-8111-111111111111",
+        tenant_id="tenant-1",
+        actor_id="actor-1",
+        limit=8,
     )
     answering.answer.assert_awaited_once_with(
         query="What is hypertension?",
@@ -86,6 +89,7 @@ async def test_run_turn_persists_answer_and_citations() -> None:
         document_id=document_id,
         conversation_id="11111111-1111-4111-8111-111111111111",
         run_id="33333333-3333-4333-8333-333333333333",
+        conversation_history=[],
     )
     command = store.complete_turn.await_args.args[0]
     assert command.tenant_id == "tenant-1"
@@ -97,6 +101,49 @@ async def test_run_turn_persists_answer_and_citations() -> None:
     assert result.run_id == "33333333-3333-4333-8333-333333333333"
     assert result.message.content.endswith("[C1].")
     assert result.citations == command.citations
+
+
+@pytest.mark.anyio
+async def test_run_turn_passes_recent_history_to_agent() -> None:
+    service, conversations, _, answering = make_service()
+    previous_user = Message(
+        message_id="44444444-4444-4444-8444-444444444444",
+        conversation_id="11111111-1111-4111-8111-111111111111",
+        tenant_id="tenant-1",
+        role="user",
+        content="What is the common cold?",
+        created_at=datetime.now(timezone.utc),
+    )
+    previous_assistant = Message(
+        message_id="55555555-5555-4555-8555-555555555555",
+        conversation_id=previous_user.conversation_id,
+        tenant_id="tenant-1",
+        role="assistant",
+        content="It is a viral respiratory infection.",
+        created_at=datetime.now(timezone.utc),
+    )
+    conversations.list_recent_messages.return_value = [
+        previous_user,
+        previous_assistant,
+    ]
+    answering.answer.return_value = AnswerResult(
+        answer="Symptoms include congestion [C1].",
+        citations=[],
+        sufficient_evidence=True,
+        safety_notice="Educational only.",
+    )
+
+    await service.run(
+        conversation_id=previous_user.conversation_id,
+        tenant_id="tenant-1",
+        actor_id="actor-1",
+        query="What are its symptoms?",
+    )
+
+    assert answering.answer.await_args.kwargs["conversation_history"] == [
+        ContextMessage(role="user", content=previous_user.content),
+        ContextMessage(role="assistant", content=previous_assistant.content),
+    ]
 
 
 @pytest.mark.anyio
@@ -160,7 +207,7 @@ async def test_run_turn_rejects_invalid_query(query: str) -> None:
     with pytest.raises(InvalidTurnInput):
         await service.run("conversation-1", "tenant-1", "actor-1", query)
 
-    conversations.get.assert_not_awaited()
+    conversations.list_recent_messages.assert_not_awaited()
     store.start_turn.assert_not_awaited()
     answering.answer.assert_not_awaited()
 
@@ -267,10 +314,11 @@ async def test_stream_turn_emits_expected_events_and_persists_turn() -> None:
         )
     ]
 
-    conversations.get.assert_awaited_once_with(
-        "11111111-1111-4111-8111-111111111111",
-        "tenant-1",
-        "actor-1",
+    conversations.list_recent_messages.assert_awaited_once_with(
+        conversation_id="11111111-1111-4111-8111-111111111111",
+        tenant_id="tenant-1",
+        actor_id="actor-1",
+        limit=8,
     )
     answering.stream_answer.assert_called_once_with(
         query="What is hypertension?",
@@ -278,6 +326,7 @@ async def test_stream_turn_emits_expected_events_and_persists_turn() -> None:
         document_id=document_id,
         conversation_id="11111111-1111-4111-8111-111111111111",
         run_id="33333333-3333-4333-8333-333333333333",
+        conversation_history=[],
     )
     store.complete_turn.assert_awaited_once()
 
@@ -351,7 +400,7 @@ async def test_stream_turn_rejects_invalid_query(query: str) -> None:
         async for _ in service.stream("conversation-1", "tenant-1", "actor-1", query):
             pass
 
-    conversations.get.assert_not_awaited()
+    conversations.list_recent_messages.assert_not_awaited()
     store.start_turn.assert_not_awaited()
     answering.stream_answer.assert_not_called()
 

@@ -25,12 +25,13 @@ def make_evidence(
     source: str = "cardiology.pdf",
     page_number: int = 10,
     score: float = 0.92,
+    document_id: str = "doc-123",
 ) -> Evidence:
     return Evidence(
         citation_id=citation_id,
         chunk_id=chunk_id,
         text=text,
-        document_id="doc-123",
+        document_id=document_id,
         page_number=page_number,
         source=source,
         score=score,
@@ -163,6 +164,57 @@ async def test_answer_insufficient_evidence_returns_insufficient_result() -> Non
     assert result.sufficient_evidence is False
     assert result.safety_notice == SAFETY_NOTICE
     chat_model.ainvoke.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_answer_uses_web_search_when_documents_are_insufficient() -> None:
+    evidence_service = AsyncMock()
+    evidence_service.collect_evidence.return_value = make_package(
+        items=[], sufficient=False
+    )
+    web_evidence = make_evidence(
+        document_id="web",
+        source="https://www.cdc.gov/fever",
+        title="CDC Fever Guidance",
+        text="Fever is a temporary increase in body temperature.",
+    )
+    web_search = AsyncMock()
+    web_search.search.return_value = make_package(items=[web_evidence])
+    chat_model = AsyncMock()
+    chat_model.ainvoke.return_value = AIMessage(
+        content="Fever is an increase in body temperature [C1]."
+    )
+    service = AnsweringService(
+        evidence_service=evidence_service,
+        chat_model=chat_model,
+        web_search_workflow=web_search,
+    )
+
+    result = await service.answer("What is fever?", "tenant-1")
+
+    web_search.search.assert_awaited_once_with("What is fever?")
+    assert result.route == "trusted_web"
+    assert result.citations == [web_evidence]
+
+
+@pytest.mark.anyio
+async def test_answer_does_not_search_web_for_document_filtered_question() -> None:
+    evidence_service = AsyncMock()
+    evidence_service.collect_evidence.return_value = make_package(
+        items=[], sufficient=False
+    )
+    web_search = AsyncMock()
+    service = AnsweringService(
+        evidence_service=evidence_service,
+        chat_model=AsyncMock(),
+        web_search_workflow=web_search,
+    )
+    document_id = UUID("a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11")
+
+    result = await service.answer("Summarize this document", "tenant-1", document_id)
+
+    assert result.sufficient_evidence is False
+    web_search.search.assert_not_awaited()
 
 
 @pytest.mark.anyio
@@ -408,6 +460,41 @@ async def test_stream_answer_insufficient_evidence() -> None:
     assert items[1].text == INSUFFICIENT_MESSAGE
     assert isinstance(items[2], AnswerCompleted)
     assert items[2].result.sufficient_evidence is False
+
+
+@pytest.mark.anyio
+async def test_stream_answer_uses_web_search_fallback() -> None:
+    evidence_service = AsyncMock()
+    evidence_service.collect_evidence.return_value = make_package(
+        items=[], sufficient=False
+    )
+    web_evidence = make_evidence(
+        document_id="web",
+        source="https://www.who.int/health-topics/fever",
+        title="WHO",
+    )
+    web_search = AsyncMock()
+    web_search.search.return_value = make_package(items=[web_evidence])
+
+    async def fake_astream(messages: object):
+        yield SimpleNamespace(content="A fever can be a sign of illness [C1].")
+
+    chat_model = AsyncMock()
+    chat_model.astream = MagicMock(side_effect=fake_astream)
+    service = AnsweringService(evidence_service, chat_model, web_search)
+
+    items = [item async for item in service.stream_answer("Fever", "tenant-1")]
+
+    progress = [item for item in items if isinstance(item, AnswerProgress)]
+    completed = next(item for item in items if isinstance(item, AnswerCompleted))
+    assert [item.stage for item in progress] == [
+        "retrieval",
+        "web_search",
+        "trusted_web",
+        "answering",
+        "validation",
+    ]
+    assert completed.result.route == "trusted_web"
 
 
 @pytest.mark.anyio

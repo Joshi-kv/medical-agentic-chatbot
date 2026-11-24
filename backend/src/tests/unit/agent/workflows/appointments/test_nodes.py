@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from agent.nodes.appointments import AppointmentNodes
-from agent.state import MedicalAgentState
+from agent.workflows.appointments.nodes import AppointmentNodes
+from agent.workflows.appointments.state import MedicalAgentState
 from services.appointment_extractor import (
     AppointmentExtractor,
     ExtractedAppointmentDetails,
@@ -431,7 +431,9 @@ async def test_request_review_from_collecting_creates_case_and_interrupts() -> N
         "appointment_request_id": "req-123",
     }
 
-    with patch("agent.nodes.appointments.interrupt") as mock_interrupt:
+    with patch(
+        "agent.workflows.appointments.nodes.interrupt"
+    ) as mock_interrupt:
         mock_interrupt.return_value = {"decision": "approved"}
         result = await nodes.request_appointment_review(state)
 
@@ -482,7 +484,9 @@ async def test_request_review_from_awaiting_review_bypasses_creation() -> None:
         "appointment_request_id": "req-123",
     }
 
-    with patch("agent.nodes.appointments.interrupt") as mock_interrupt:
+    with patch(
+        "agent.workflows.appointments.nodes.interrupt"
+    ) as mock_interrupt:
         mock_interrupt.return_value = {"decision": "rejected"}
         result = await nodes.request_appointment_review(state)
 
@@ -597,7 +601,10 @@ async def test_request_appointment_review_validates_resume_value(
         "appointment_request_id": "req-123",
     }
 
-    with patch("agent.nodes.appointments.interrupt", return_value=invalid_resume):
+    with patch(
+        "agent.workflows.appointments.nodes.interrupt",
+        return_value=invalid_resume,
+    ):
         with pytest.raises(ValueError, match=expected_error):
             await nodes.request_appointment_review(state)
 

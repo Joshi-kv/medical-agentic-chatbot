@@ -102,6 +102,17 @@ def test_get_conversation_returns_404_for_missing_record() -> None:
 
 def test_list_messages_returns_chronological_records() -> None:
     service = AsyncMock(spec=ConversationService)
+    citation = CitationRecord(
+        citation_id="44444444-4444-4444-8444-444444444444",
+        tenant_id="tenant-1",
+        assistant_message_id="22222222-2222-4222-8222-222222222222",
+        citation_label="C1",
+        document_id="web",
+        chunk_id="web-1",
+        page_number=0,
+        source="https://www.cdc.gov/fever",
+        title="CDC fever guidance",
+    )
     message = Message(
         message_id="22222222-2222-4222-8222-222222222222",
         conversation_id=CONVERSATION_ID,
@@ -109,6 +120,7 @@ def test_list_messages_returns_chronological_records() -> None:
         role="user",
         content="What is hypertension?",
         created_at=datetime(2026, 11, 10, 10, 1, tzinfo=timezone.utc),
+        citations=[citation],
     )
     service.list_messages.return_value = [message]
     client = make_client(service, AsyncMock(spec=TurnService))
@@ -117,6 +129,16 @@ def test_list_messages_returns_chronological_records() -> None:
 
     assert response.status_code == status.HTTP_200_OK
     assert response.json()[0]["content"] == "What is hypertension?"
+    assert response.json()[0]["citations"] == [
+        {
+            "citation_label": "C1",
+            "document_id": "web",
+            "chunk_id": "web-1",
+            "page_number": 0,
+            "source": "https://www.cdc.gov/fever",
+            "title": "CDC fever guidance",
+        }
+    ]
     service.list_messages.assert_awaited_once_with(
         conversation_id=CONVERSATION_ID,
         tenant_id="tenant-1",
