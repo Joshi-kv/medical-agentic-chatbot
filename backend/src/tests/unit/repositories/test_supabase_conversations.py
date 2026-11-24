@@ -99,10 +99,12 @@ async def test_get_conversation_always_filters_by_tenant() -> None:
     result = await store.get_conversation(
         "11111111-1111-4111-8111-111111111111",
         "tenant-1",
+        "actor-1",
     )
 
     assert result == make_conversation()
     assert query.eq.call_args_list[1].args == ("tenant_id", "tenant-1")
+    assert query.eq.call_args_list[2].args == ("actor_id", "actor-1")
 
 
 @pytest.mark.anyio
@@ -112,7 +114,7 @@ async def test_get_conversation_returns_none_when_missing() -> None:
     client.table.return_value = query
     store = SupabaseConversationStore(client)
 
-    result = await store.get_conversation("missing", "tenant-1")
+    result = await store.get_conversation("missing", "tenant-1", "actor-1")
 
     assert result is None
 

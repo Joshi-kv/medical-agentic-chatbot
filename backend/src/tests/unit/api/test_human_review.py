@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock
 from fastapi import FastAPI, status
 from fastapi.testclient import TestClient
 
+from api.dependencies.conversations import get_conversation_service
 from api.dependencies.human_review import get_human_review_service
 from api.dependencies.review_resolution import get_review_resolution_service
 from api.routers.human_review import router
@@ -12,6 +13,7 @@ from api.security.api_key import (
     authenticate_api_key,
     authenticate_staff_api_key,
 )
+from services.conversation import ConversationService
 from services.human_review import (
     HumanReviewCase,
     HumanReviewConflict,
@@ -66,6 +68,8 @@ def make_client(
     app.include_router(router)
     app.dependency_overrides[get_human_review_service] = lambda: service
     app.dependency_overrides[get_review_resolution_service] = lambda: service
+    conversation_service = AsyncMock(spec=ConversationService)
+    app.dependency_overrides[get_conversation_service] = lambda: conversation_service
 
     default_staff = staff_principal or APIPrincipal(
         key_id="staff-1",

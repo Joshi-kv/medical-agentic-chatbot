@@ -85,6 +85,7 @@ def test_get_conversation_uses_authenticated_tenant() -> None:
     service.get.assert_awaited_once_with(
         conversation_id=CONVERSATION_ID,
         tenant_id="tenant-1",
+        actor_id="key-1",
     )
 
 
@@ -119,6 +120,7 @@ def test_list_messages_returns_chronological_records() -> None:
     service.list_messages.assert_awaited_once_with(
         conversation_id=CONVERSATION_ID,
         tenant_id="tenant-1",
+        actor_id="key-1",
     )
 
 
@@ -165,6 +167,7 @@ def test_create_turn_returns_persisted_answer() -> None:
     turn_service.run.assert_awaited_once_with(
         conversation_id=CONVERSATION_ID,
         tenant_id="tenant-1",
+        actor_id="key-1",
         query="What is hypertension?",
         document_id=None,
     )
@@ -241,6 +244,7 @@ def test_stream_turn_returns_event_stream() -> None:
     turn_service.stream.assert_called_once_with(
         conversation_id=CONVERSATION_ID,
         tenant_id="tenant-1",
+        actor_id="key-1",
         query="What is hypertension?",
         document_id=None,
     )
@@ -266,6 +270,7 @@ def test_stream_turn_forwards_document_id() -> None:
     turn_service.stream.assert_called_once_with(
         conversation_id=CONVERSATION_ID,
         tenant_id="tenant-1",
+        actor_id="key-1",
         query="What is hypertension?",
         document_id=UUID(doc_id),
     )

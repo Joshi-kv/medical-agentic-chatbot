@@ -3,6 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from api.dependencies.conversations import get_conversation_service
 from api.dependencies.human_review import get_human_review_service
 from api.dependencies.review_resolution import get_review_resolution_service
 from api.dependencies.security import require_scope
@@ -12,6 +13,7 @@ from api.schemas.human_review import (
     ResolveHumanReviewRequest,
 )
 from api.security.api_key import APIPrincipal, StaffPrincipal
+from services.conversation import ConversationNotFound, ConversationService
 from services.human_review import (
     HumanReviewCase,
     HumanReviewConflict,
@@ -68,12 +70,23 @@ async def get_review_case(
         HumanReviewService,
         Depends(get_human_review_service),
     ],
+    conversations: Annotated[
+        ConversationService,
+        Depends(get_conversation_service),
+    ],
 ) -> PatientHumanReviewCaseResponse:
     try:
         case = await service.get(
             case_id=str(case_id),
             tenant_id=principal.tenant_id,
         )
+        await conversations.get(
+            conversation_id=case.conversation_id,
+            tenant_id=principal.tenant_id,
+            actor_id=principal.key_id,
+        )
+    except ConversationNotFound as error:
+        raise _review_http_error(HumanReviewNotFound()) from error
     except HumanReviewError as error:
         raise _review_http_error(error) from error
 

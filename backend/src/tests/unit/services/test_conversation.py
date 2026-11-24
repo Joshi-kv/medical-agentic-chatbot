@@ -113,12 +113,13 @@ async def test_get_conversation_uses_tenant_filter() -> None:
     store.get_conversation.return_value = expected
     service = ConversationService(store)
 
-    result = await service.get("conversation-1", "tenant-1")
+    result = await service.get("conversation-1", "tenant-1", "actor-1")
 
     assert result is expected
     store.get_conversation.assert_awaited_once_with(
         conversation_id="conversation-1",
         tenant_id="tenant-1",
+        actor_id="actor-1",
     )
 
 
@@ -132,7 +133,7 @@ async def test_get_conversation_hides_missing_and_deleted_records(
     service = ConversationService(store)
 
     with pytest.raises(ConversationNotFound):
-        await service.get("conversation-1", "tenant-1")
+        await service.get("conversation-1", "tenant-1", "actor-1")
 
 
 @pytest.mark.anyio
@@ -142,7 +143,7 @@ async def test_get_conversation_wraps_store_error() -> None:
     service = ConversationService(store)
 
     with pytest.raises(ConversationError, match="lookup failed") as exc_info:
-        await service.get("conversation-1", "tenant-1")
+        await service.get("conversation-1", "tenant-1", "actor-1")
 
     assert isinstance(exc_info.value.__cause__, RuntimeError)
 
@@ -163,7 +164,7 @@ async def test_list_messages_checks_conversation_and_returns_messages() -> None:
     store.list_messages.return_value = [message]
     service = ConversationService(store)
 
-    result = await service.list_messages("conversation-1", "tenant-1")
+    result = await service.list_messages("conversation-1", "tenant-1", "actor-1")
 
     assert result == [message]
     store.list_messages.assert_awaited_once_with(
@@ -180,7 +181,7 @@ async def test_list_messages_does_not_query_messages_when_conversation_is_missin
     service = ConversationService(store)
 
     with pytest.raises(ConversationNotFound):
-        await service.list_messages("conversation-1", "tenant-1")
+        await service.list_messages("conversation-1", "tenant-1", "actor-1")
 
     store.list_messages.assert_not_awaited()
 
@@ -193,6 +194,6 @@ async def test_list_messages_wraps_store_error() -> None:
     service = ConversationService(store)
 
     with pytest.raises(ConversationError, match="Message lookup failed") as exc_info:
-        await service.list_messages("conversation-1", "tenant-1")
+        await service.list_messages("conversation-1", "tenant-1", "actor-1")
 
     assert isinstance(exc_info.value.__cause__, RuntimeError)

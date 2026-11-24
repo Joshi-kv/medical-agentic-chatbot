@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     ingestion_api_key: SecretStr
     api_key_tenant_id: str
     api_key_id: str = "primary"
+    api_key_signup_enabled: bool = False
     staff_api_key: SecretStr | None = None
     staff_api_key_id: str = "staff-primary"
 

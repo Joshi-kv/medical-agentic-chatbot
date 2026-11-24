@@ -92,6 +92,7 @@ async def stream_turn(
             async for event in service.stream(
                 conversation_id=str(conversation_id),
                 tenant_id=principal.tenant_id,
+                actor_id=principal.key_id,
                 query=request.query,
                 document_id=request.document_id,
             ):
@@ -160,6 +161,7 @@ async def get_conversation(
         conversation = await service.get(
             conversation_id=str(conversation_id),
             tenant_id=principal.tenant_id,
+            actor_id=principal.key_id,
         )
     except ConversationNotFound as error:
         raise _not_found() from error
@@ -187,6 +189,7 @@ async def list_messages(
         messages = await service.list_messages(
             conversation_id=str(conversation_id),
             tenant_id=principal.tenant_id,
+            actor_id=principal.key_id,
         )
     except ConversationNotFound as error:
         raise _not_found() from error
@@ -212,6 +215,7 @@ async def create_turn(
         result = await service.run(
             conversation_id=str(conversation_id),
             tenant_id=principal.tenant_id,
+            actor_id=principal.key_id,
             query=request.query,
             document_id=request.document_id,
         )
