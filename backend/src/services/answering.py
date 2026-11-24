@@ -9,7 +9,9 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from prompts.answering import SYSTEM_PROMPT, USER_PROMPT
-from services.evidence import Evidence, EvidenceService
+from services.conversation_context import ContextMessage
+from services.evidence import Evidence, EvidencePackage, EvidenceService
+from services.web_search_workflow import WebSearchWorkflow, WebSearchWorkflowError
 
 CITATION_PATTERN = re.compile(r"\[(C\d+)\]")
 
@@ -63,6 +65,7 @@ class AnswerProvider(Protocol):
         document_id: UUID | None = None,
         conversation_id: str | None = None,
         run_id: str | None = None,
+        conversation_history: list[ContextMessage] | None = None,
     ) -> AnswerResult: ...
 
     def stream_answer(
@@ -72,6 +75,7 @@ class AnswerProvider(Protocol):
         document_id: UUID | None = None,
         conversation_id: str | None = None,
         run_id: str | None = None,
+        conversation_history: list[ContextMessage] | None = None,
     ) -> AsyncIterator[AnswerStreamItem]: ...
 
 
@@ -84,9 +88,11 @@ class AnsweringService:
         self,
         evidence_service: EvidenceService,
         chat_model: BaseChatModel,
+        web_search_workflow: WebSearchWorkflow | None = None,
     ) -> None:
         self._evidence_service = evidence_service
         self._chat_model = chat_model
+        self._web_search_workflow = web_search_workflow
 
     async def answer(
         self,
@@ -106,6 +112,11 @@ class AnsweringService:
         )
 
         if not evidence_package.sufficient:
+            web_evidence = await self._search_web_if_allowed(query, document_id)
+            if web_evidence is not None and web_evidence.sufficient:
+                evidence_package = web_evidence
+
+        if not evidence_package.sufficient:
             return AnswerResult(
                 answer=INSUFFICIENT_MESSAGE,
                 citations=[],
@@ -114,6 +125,7 @@ class AnsweringService:
             )
 
         evidence_items = evidence_package.items
+        route = self._evidence_route(evidence_items)
 
         evidence_text = "\n\n".join(
             self._format_evidence(item) for item in evidence_items
@@ -155,6 +167,7 @@ class AnsweringService:
             citations=citations,
             sufficient_evidence=True,
             safety_notice=SAFETY_NOTICE,
+            route=route,
         )
 
     async def stream_answer(
@@ -179,6 +192,15 @@ class AnsweringService:
         except Exception as error:
             raise AnsweringError("Evidence retrieval failed.") from error
 
+        if not evidence_package.sufficient and self._web_search_allowed(document_id):
+            yield AnswerProgress(
+                stage="web_search",
+                message="Searching trusted medical websites...",
+            )
+            web_evidence = await self._search_web_if_allowed(query, document_id)
+            if web_evidence is not None and web_evidence.sufficient:
+                evidence_package = web_evidence
+
         if not evidence_package.sufficient:
             result = AnswerResult(
                 answer=INSUFFICIENT_MESSAGE,
@@ -191,9 +213,10 @@ class AnsweringService:
             return
 
         evidence_items = evidence_package.items
+        route = self._evidence_route(evidence_items)
 
         yield AnswerProgress(
-            stage="retrieval",
+            stage=route,
             message=f"Found {len(evidence_items)} relevant medical passages.",
         )
 
@@ -256,17 +279,23 @@ class AnsweringService:
             citations=citations,
             sufficient_evidence=True,
             safety_notice=SAFETY_NOTICE,
+            route=route,
         )
 
         yield AnswerCompleted(result=result)
 
     def _format_evidence(self, evidence: Evidence) -> str:
         source_name = evidence.title or evidence.source
+        location = (
+            f"URL: {evidence.source}"
+            if evidence.document_id == "web"
+            else f"Page: {evidence.page_number}"
+        )
 
         return (
             f"[{evidence.citation_id}]\n"
             f"Source: {source_name}\n"
-            f"Page: {evidence.page_number}\n"
+            f"{location}\n"
             f"Content: {evidence.text}"
         )
 
@@ -287,3 +316,29 @@ class AnsweringService:
             raise AnsweringError("Generated answer contains invalid citations.")
 
         return [item for item in evidence if item.citation_id in cited_ids]
+
+    async def _search_web_if_allowed(
+        self,
+        query: str,
+        document_id: UUID | None,
+    ) -> EvidencePackage | None:
+        if document_id is not None:
+            return None
+
+        if self._web_search_workflow is None:
+            return None
+
+        try:
+            return await self._web_search_workflow.search(query)
+        except WebSearchWorkflowError:
+            return None
+
+    def _web_search_allowed(self, document_id: UUID | None) -> bool:
+        return document_id is None and self._web_search_workflow is not None
+
+    @staticmethod
+    def _evidence_route(evidence: list[Evidence]) -> str:
+        if evidence and all(item.document_id == "web" for item in evidence):
+            return "trusted_web"
+
+        return "curated_documents"

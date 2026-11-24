@@ -197,3 +197,51 @@ async def test_list_messages_wraps_store_error() -> None:
         await service.list_messages("conversation-1", "tenant-1", "actor-1")
 
     assert isinstance(exc_info.value.__cause__, RuntimeError)
+
+
+@pytest.mark.anyio
+async def test_list_recent_messages_checks_owner_and_applies_limit() -> None:
+    conversation = make_conversation()
+    message = Message(
+        message_id="message-1",
+        conversation_id=conversation.conversation_id,
+        tenant_id=conversation.tenant_id,
+        role="user",
+        content="What is hypertension?",
+        created_at=datetime.now(timezone.utc),
+    )
+    store = AsyncMock()
+    store.get_conversation.return_value = conversation
+    store.list_recent_messages.return_value = [message]
+    service = ConversationService(store)
+
+    result = await service.list_recent_messages(
+        "conversation-1",
+        "tenant-1",
+        "actor-1",
+        limit=8,
+    )
+
+    assert result == [message]
+    store.list_recent_messages.assert_awaited_once_with(
+        conversation_id="conversation-1",
+        tenant_id="tenant-1",
+        limit=8,
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("limit", [0, 21])
+async def test_list_recent_messages_rejects_invalid_limit(limit: int) -> None:
+    store = AsyncMock()
+    service = ConversationService(store)
+
+    with pytest.raises(InvalidConversationInput, match="between 1 and 20"):
+        await service.list_recent_messages(
+            "conversation-1",
+            "tenant-1",
+            "actor-1",
+            limit=limit,
+        )
+
+    store.get_conversation.assert_not_awaited()

@@ -20,6 +20,7 @@ from services.conversation import (
     ConversationStore,
     Message,
 )
+from services.conversation_context import ContextMessage
 from services.human_review import HumanReviewCase, HumanReviewService
 
 MAX_TURN_QUERY_LENGTH = 2000
@@ -76,7 +77,11 @@ class TurnService:
     ) -> TurnResult:
         normalized_query = self._validate_query(query)
 
-        await self._conversations.get(conversation_id, tenant_id, actor_id)
+        conversation_history = await self._conversation_history(
+            conversation_id=conversation_id,
+            tenant_id=tenant_id,
+            actor_id=actor_id,
+        )
 
         user_message = Message(
             message_id=str(uuid4()),
@@ -100,6 +105,7 @@ class TurnService:
                 document_id=document_id,
                 conversation_id=conversation_id,
                 run_id=started_turn.run_id,
+                conversation_history=conversation_history,
             )
             review_case = await self._create_review_case(
                 route=answer.route,
@@ -168,7 +174,11 @@ class TurnService:
     ) -> AsyncIterator[TurnStreamEvent]:
         normalized_query = self._validate_query(query)
 
-        await self._conversations.get(conversation_id, tenant_id, actor_id)
+        conversation_history = await self._conversation_history(
+            conversation_id=conversation_id,
+            tenant_id=tenant_id,
+            actor_id=actor_id,
+        )
 
         user_message = Message(
             message_id=str(uuid4()),
@@ -199,6 +209,7 @@ class TurnService:
                 document_id=document_id,
                 conversation_id=conversation_id,
                 run_id=started_turn.run_id,
+                conversation_history=conversation_history,
             ):
                 if isinstance(item, AnswerProgress):
                     yield TurnStreamEvent(
@@ -342,6 +353,25 @@ class TurnService:
             query=query,
             review_type="clinical",
         )
+
+    async def _conversation_history(
+        self,
+        conversation_id: str,
+        tenant_id: str,
+        actor_id: str,
+    ) -> list[ContextMessage]:
+        messages = await self._conversations.list_recent_messages(
+            conversation_id=conversation_id,
+            tenant_id=tenant_id,
+            actor_id=actor_id,
+            limit=8,
+        )
+
+        return [
+            ContextMessage(role=message.role, content=message.content)
+            for message in messages
+            if message.role in {"user", "assistant"}
+        ]
 
     async def _fail_quietly(self, run_id: str, tenant_id: str) -> None:
         try:

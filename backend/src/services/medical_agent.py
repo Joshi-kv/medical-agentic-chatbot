@@ -16,6 +16,11 @@ from services.appointment_workflow import (
     AppointmentWorkflow,
     AppointmentWorkflowError,
 )
+from services.conversation_context import (
+    ContextMessage,
+    ConversationContextError,
+    ConversationContextualizer,
+)
 from services.intent_router import IntentRouter, IntentRouterError
 
 HOSPITAL_NAVIGATION_MESSAGE = (
@@ -41,11 +46,13 @@ class MedicalAgent:
         intent_router: IntentRouter,
         answering_service: AnsweringService,
         appointment_workflow: AppointmentWorkflow,
+        contextualizer: ConversationContextualizer,
     ) -> None:
         self._emergency_guardrail = emergency_guardrail
         self._intent_router = intent_router
         self._answering_service = answering_service
         self._appointment_workflow = appointment_workflow
+        self._contextualizer = contextualizer
 
     async def answer(
         self,
@@ -54,6 +61,7 @@ class MedicalAgent:
         document_id: UUID | None = None,
         conversation_id: str | None = None,
         run_id: str | None = None,
+        conversation_history: list[ContextMessage] | None = None,
     ) -> AnswerResult:
         safety = self._emergency_guardrail.evaluate(query)
 
@@ -74,8 +82,22 @@ class MedicalAgent:
                 run_id=run_id,
             )
 
+        standalone_query = await self._standalone_query(
+            query=query,
+            history=conversation_history,
+        )
+        contextualized_safety = self._emergency_guardrail.evaluate(standalone_query)
+
+        if contextualized_safety.action == SafetyAction.EMERGENCY:
+            return self._static_result(
+                message=(
+                    contextualized_safety.response or "Seek emergency medical help now."
+                ),
+                route="emergency",
+            )
+
         try:
-            decision = await self._intent_router.classify(query)
+            decision = await self._intent_router.classify(standalone_query)
         except IntentRouterError:
             return self._static_result(
                 message=ROUTING_FAILURE_MESSAGE,
@@ -84,14 +106,14 @@ class MedicalAgent:
 
         if decision.route == AgentRoute.EDUCATION:
             return await self._answering_service.answer(
-                query=query,
+                query=standalone_query,
                 tenant_id=tenant_id,
                 document_id=document_id,
             )
 
         if decision.route == AgentRoute.APPOINTMENT_REQUEST:
             return await self._run_appointment(
-                query=query,
+                query=standalone_query,
                 tenant_id=tenant_id,
                 conversation_id=conversation_id,
                 run_id=run_id,
@@ -109,6 +131,7 @@ class MedicalAgent:
         document_id: UUID | None = None,
         conversation_id: str | None = None,
         run_id: str | None = None,
+        conversation_history: list[ContextMessage] | None = None,
     ) -> AsyncIterator[AnswerStreamItem]:
         yield AnswerProgress(
             stage="safety",
@@ -148,13 +171,36 @@ class MedicalAgent:
             yield AnswerCompleted(result=result)
             return
 
+        if conversation_history:
+            yield AnswerProgress(
+                stage="context",
+                message="Understanding the conversation context...",
+            )
+
+        standalone_query = await self._standalone_query(
+            query=query,
+            history=conversation_history,
+        )
+        contextualized_safety = self._emergency_guardrail.evaluate(standalone_query)
+
+        if contextualized_safety.action == SafetyAction.EMERGENCY:
+            result = self._static_result(
+                message=(
+                    contextualized_safety.response or "Seek emergency medical help now."
+                ),
+                route="emergency",
+            )
+            yield AnswerDelta(text=result.answer)
+            yield AnswerCompleted(result=result)
+            return
+
         yield AnswerProgress(
             stage="routing",
             message="Selecting the appropriate hospital service...",
         )
 
         try:
-            decision = await self._intent_router.classify(query)
+            decision = await self._intent_router.classify(standalone_query)
         except IntentRouterError:
             result = self._static_result(
                 message=ROUTING_FAILURE_MESSAGE,
@@ -163,7 +209,7 @@ class MedicalAgent:
         else:
             if decision.route == AgentRoute.EDUCATION:
                 async for event in self._answering_service.stream_answer(
-                    query=query,
+                    query=standalone_query,
                     tenant_id=tenant_id,
                     document_id=document_id,
                 ):
@@ -177,7 +223,7 @@ class MedicalAgent:
                 )
 
                 result = await self._run_appointment(
-                    query=query,
+                    query=standalone_query,
                     tenant_id=tenant_id,
                     conversation_id=conversation_id,
                     run_id=run_id,
@@ -203,6 +249,22 @@ class MedicalAgent:
             tenant_id=tenant_id,
             conversation_id=conversation_id,
         )
+
+    async def _standalone_query(
+        self,
+        query: str,
+        history: list[ContextMessage] | None,
+    ) -> str:
+        if not history:
+            return query
+
+        try:
+            return await self._contextualizer.rewrite(
+                query=query,
+                history=history,
+            )
+        except ConversationContextError:
+            return query
 
     async def _run_appointment(
         self,

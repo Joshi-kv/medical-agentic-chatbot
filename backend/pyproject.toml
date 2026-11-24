@@ -38,6 +38,7 @@ known-first-party = ["agent", "api", "config", "helpers", "ingestion", "integrat
 
 [dependency-groups]
 dev = [
+    "langgraph-cli[inmem]>=0.4.43",
     "pytest>=9.1.1",
     "ruff>=0.17.3",
 ]

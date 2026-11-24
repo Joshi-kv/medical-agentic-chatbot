@@ -8,7 +8,7 @@ from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
-from agent.graph import build_appointment_graph
+from agent.workflows.appointments.graph import build_appointment_graph
 from api.dependencies.appointments import get_appointment_nodes
 from config.settings import get_settings
 from integrations.langsmith import configure_langsmith_tracing

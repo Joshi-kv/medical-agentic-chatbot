@@ -1,6 +1,13 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import {
+  citationAnchorId,
+  externalHttpUrl,
+  linkCitationMarkers,
+} from "@/lib/markdown";
 import { readSseStream } from "@/lib/sse";
 import type { Citation, Conversation, ReviewCase, StoredMessage } from "@/lib/types";
 
@@ -18,7 +25,12 @@ type ChatMessage = {
 type AgentStatus = { stage: string; message: string };
 
 function messageFromStored(message: StoredMessage): ChatMessage {
-  return { id: message.message_id, role: message.role, content: message.content };
+  return {
+    id: message.message_id,
+    role: message.role,
+    content: message.content,
+    citations: message.citations,
+  };
 }
 
 function errorMessage(payload: unknown): string {
@@ -285,24 +297,78 @@ function AgentProgress({ status, completedStages }: { status: AgentStatus | null
 function Message({ message, streaming }: { message: ChatMessage; streaming: boolean }) {
   if (message.role === "user") return <div className="user-message">{message.content}</div>;
 
+  const citations = message.citations ?? [];
+  const markdown = linkCitationMarkers(message.content, message.id, citations);
+
   return (
     <article className="assistant-message">
       <div className="assistant-answer">
-        {message.content ? <p>{message.content}</p> : streaming ? <span className="answer-placeholder">Preparing a careful answer…</span> : null}
+        {message.content ? (
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              h1: ({ children }) => <h2>{children}</h2>,
+              a: ({ href, children, ...props }) => {
+                const internalCitation = href?.startsWith("#citation-");
+                if (!internalCitation) {
+                  return <span className="unverified-answer-link">{children}</span>;
+                }
+                return (
+                  <a
+                    {...props}
+                    href={href}
+                    className="citation-reference"
+                  >
+                    {children}
+                  </a>
+                );
+              },
+            }}
+          >
+            {markdown}
+          </ReactMarkdown>
+        ) : streaming ? (
+          <span className="answer-placeholder">Preparing a careful answer…</span>
+        ) : null}
       </div>
 
-      {message.citations && message.citations.length > 0 && (
-        <details className="citations">
-          <summary>View {message.citations.length} source{message.citations.length === 1 ? "" : "s"}</summary>
-          <div className="citation-list">
-            {message.citations.map((citation) => (
-              <div className="citation" key={`${citation.document_id}-${citation.chunk_id}`}>
-                <span>{citation.citation_label}</span>
-                <div><strong>{citation.title ?? citation.source}</strong><small>Page {citation.page_number} · {citation.source}</small></div>
-              </div>
-            ))}
+      {citations.length > 0 && (
+        <section className="citations" aria-label="Answer sources">
+          <div className="citations-heading">
+            {citations.length} source{citations.length === 1 ? "" : "s"}
           </div>
-        </details>
+          <div className="citation-list">
+            {citations.map((citation) => {
+              const sourceUrl = citation.document_id === "web"
+                ? externalHttpUrl(citation.source)
+                : null;
+              const sourceHost = sourceUrl ? new URL(sourceUrl).hostname : null;
+              return (
+                <div
+                  className="citation"
+                  id={citationAnchorId(message.id, citation.citation_label)}
+                  key={`${citation.document_id}-${citation.chunk_id}`}
+                >
+                  <span>{citation.citation_label}</span>
+                  <div>
+                    {sourceUrl ? (
+                      <a href={sourceUrl} target="_blank" rel="noreferrer noopener">
+                        {citation.title ?? sourceHost}
+                      </a>
+                    ) : (
+                      <strong>{citation.title ?? citation.source}</strong>
+                    )}
+                    <small>
+                      {sourceUrl
+                        ? `Website · ${sourceHost}`
+                        : `Page ${citation.page_number} · ${citation.source}`}
+                    </small>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
       )}
 
       {message.safetyNotice && <div className="safety-notice"><strong>Safety note</strong><span>{message.safetyNotice}</span></div>}

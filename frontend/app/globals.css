@@ -58,7 +58,20 @@ button:disabled { cursor: not-allowed; }
 .prompt-suggestions button:hover { border-color: rgba(23,107,84,.4); background: #fff; }
 .user-message { width: fit-content; max-width: 82%; margin: 0 0 28px auto; padding: 13px 17px; border-radius: 18px 18px 5px 18px; color: #fff; background: #1b2924; white-space: pre-wrap; font-size: 13px; line-height: 1.55; }
 .assistant-message { margin: 0 0 34px; }
-.assistant-answer p { margin: 0; color: #34413c; white-space: pre-wrap; font-size: 15px; line-height: 1.78; }
+.assistant-answer { color: #34413c; font-size: 15px; line-height: 1.78; overflow-wrap: anywhere; }
+.assistant-answer > :first-child { margin-top: 0; }
+.assistant-answer > :last-child { margin-bottom: 0; }
+.assistant-answer p { margin: 0 0 13px; }
+.assistant-answer h2, .assistant-answer h3, .assistant-answer h4 { margin: 20px 0 8px; color: var(--ink); line-height: 1.3; letter-spacing: -.02em; }
+.assistant-answer h2 { font-size: 18px; }
+.assistant-answer h3, .assistant-answer h4 { font-size: 16px; }
+.assistant-answer ul, .assistant-answer ol { margin: 8px 0 14px; padding-left: 22px; }
+.assistant-answer li { margin: 5px 0; padding-left: 2px; }
+.assistant-answer blockquote { margin: 14px 0; padding: 8px 13px; border-left: 3px solid var(--green); color: var(--muted); background: #f4faf7; }
+.assistant-answer code { padding: 2px 5px; border-radius: 5px; background: #edf4f0; font-size: .9em; }
+.assistant-answer a { color: var(--green-dark); font-weight: 700; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.assistant-answer .unverified-answer-link { color: inherit; }
+.assistant-answer .citation-reference { display: inline-flex; margin-left: 2px; padding: 0 4px; border-radius: 5px; color: var(--green); background: var(--green-soft); font-size: .78em; line-height: 1.55; text-decoration: none; vertical-align: text-top; }
 .answer-placeholder { color: #809089; font-size: 13px; }
 .agent-progress { display: flex; align-items: center; gap: 13px; margin: -12px 0 30px; padding: 13px 15px; border: 1px solid rgba(23,107,84,.13); border-radius: 15px; background: #f3faf6; }
 .agent-progress strong, .agent-progress span { display: block; }
@@ -70,13 +83,15 @@ button:disabled { cursor: not-allowed; }
 .progress-dots i:nth-child(3) { animation-delay: .3s; }
 @keyframes dot { 50% { opacity: .25; transform: translateY(-3px); } }
 .citations { margin-top: 18px; }
-.citations summary { width: fit-content; padding: 9px 12px; border: 1px solid var(--line); border-radius: 11px; list-style: none; background: #fff; font-size: 11px; font-weight: 750; cursor: pointer; }
-.citations summary::before { content: "▤"; margin-right: 7px; }
+.citations-heading { width: fit-content; padding: 9px 12px; border: 1px solid var(--line); border-radius: 11px; background: #fff; font-size: 11px; font-weight: 750; }
+.citations-heading::before { content: "▤"; margin-right: 7px; }
 .citation-list { display: grid; gap: 7px; margin-top: 9px; }
-.citation { display: flex; align-items: center; gap: 10px; padding: 11px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.68); }
+.citation { display: flex; align-items: center; gap: 10px; padding: 11px; border: 1px solid var(--line); border-radius: 12px; background: rgba(255,255,255,.68); scroll-margin-top: 18px; }
+.citation:target { border-color: rgba(23,107,84,.45); background: var(--green-soft); }
 .citation > span { display: grid; width: 28px; height: 28px; place-items: center; border-radius: 8px; color: var(--green); background: var(--green-soft); font-size: 10px; font-weight: 800; }
-.citation strong, .citation small { display: block; }
-.citation strong { font-size: 11px; }
+.citation strong, .citation a, .citation small { display: block; }
+.citation strong, .citation a { color: var(--ink); font-size: 11px; font-weight: 750; }
+.citation a { text-decoration-thickness: 1px; text-underline-offset: 2px; }
 .citation small { margin-top: 2px; color: var(--muted); font-size: 9px; }
 .safety-notice { display: flex; gap: 9px; margin-top: 10px; padding: 11px 13px; border-radius: 12px; color: #705622; background: #fff8e8; font-size: 10px; line-height: 1.5; }
 .safety-notice strong { flex: 0 0 auto; }

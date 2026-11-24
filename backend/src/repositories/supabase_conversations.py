@@ -6,6 +6,7 @@ from anyio import to_thread
 from supabase import Client
 
 from services.conversation import (
+    CitationRecord,
     CompleteTurnCommand,
     Conversation,
     ConversationStatus,
@@ -71,7 +72,10 @@ class SupabaseConversationStore:
         response = await to_thread.run_sync(
             lambda: self._client.table("messages")
             .select(
-                "message_id,conversation_id,tenant_id,role,content,created_at"
+                "message_id,conversation_id,tenant_id,role,content,created_at,"
+                "citations!citations_message_tenant_fk("
+                "citation_id,tenant_id,assistant_message_id,"
+                "citation_label,document_id,chunk_id,page_number,source,title)"
             )
             .eq("conversation_id", conversation_id)
             .eq("tenant_id", tenant_id)
@@ -79,6 +83,27 @@ class SupabaseConversationStore:
             .execute()
         )
         return [_message_from_row(row) for row in response.data]
+
+    async def list_recent_messages(
+        self,
+        conversation_id: str,
+        tenant_id: str,
+        limit: int,
+    ) -> list[Message]:
+        response = await to_thread.run_sync(
+            lambda: self._client.table("messages")
+            .select(
+                "message_id,conversation_id,tenant_id,role,content,created_at"
+            )
+            .eq("conversation_id", conversation_id)
+            .eq("tenant_id", tenant_id)
+            .in_("role", ["user", "assistant"])
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        messages = [_message_from_row(row) for row in response.data]
+        return list(reversed(messages))
 
     async def start_turn(self, message: Message) -> StartedTurn:
         run_id = _new_uuid()
@@ -167,6 +192,13 @@ def _conversation_from_row(row: dict[str, Any]) -> Conversation:
 
 
 def _message_from_row(row: dict[str, Any]) -> Message:
+    raw_citations = row.get("citations", [])
+    citations = (
+        [_citation_from_row(item) for item in raw_citations if isinstance(item, dict)]
+        if isinstance(raw_citations, list)
+        else []
+    )
+
     return Message(
         message_id=str(row["message_id"]),
         conversation_id=str(row["conversation_id"]),
@@ -174,6 +206,21 @@ def _message_from_row(row: dict[str, Any]) -> Message:
         role=_message_role(row["role"]),
         content=str(row["content"]),
         created_at=_parse_datetime(row["created_at"]),
+        citations=citations,
+    )
+
+
+def _citation_from_row(row: dict[str, Any]) -> CitationRecord:
+    return CitationRecord(
+        citation_id=str(row["citation_id"]),
+        tenant_id=str(row["tenant_id"]),
+        assistant_message_id=str(row["assistant_message_id"]),
+        citation_label=str(row["citation_label"]),
+        document_id=str(row.get("document_id") or ""),
+        chunk_id=str(row["chunk_id"]),
+        page_number=int(row.get("page_number") or 0),
+        source=str(row["source"]),
+        title=_optional_string(row.get("title")),
     )
 
 

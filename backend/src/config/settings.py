@@ -24,7 +24,24 @@ class Settings(BaseSettings):
     langsmith_hide_inputs: bool = True
     langsmith_hide_outputs: bool = True
 
-    tavily_api_key: str
+    tavily_api_key: SecretStr | None = None
+    tavily_trusted_domains: list[str] = Field(
+        default=[
+            "who.int",
+            "cdc.gov",
+            "nih.gov",
+            "medlineplus.gov",
+            "nhs.uk",
+            "mayoclinic.org",
+            "clevelandclinic.org",
+        ]
+    )
+    tavily_max_results: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+    )
+    tavily_search_depth: str = "basic"
 
     pinecone_api_key: str
     pinecone_index_name: str

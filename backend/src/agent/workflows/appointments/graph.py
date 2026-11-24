@@ -2,12 +2,13 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from agent.nodes.appointments import AppointmentNodes
-from agent.state import MedicalAgentState
+from agent.workflows.appointments.nodes import AppointmentNodes
+from agent.workflows.appointments.state import MedicalAgentState
 
 
 def build_appointment_graph(
-    nodes: AppointmentNodes, checkpointer: BaseCheckpointSaver
+    nodes: AppointmentNodes,
+    checkpointer: BaseCheckpointSaver | None = None,
 ) -> CompiledStateGraph:
     """Build the multi-turn appointment workflow"""
 

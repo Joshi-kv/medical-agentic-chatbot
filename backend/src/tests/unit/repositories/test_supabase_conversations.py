@@ -16,7 +16,7 @@ from services.conversation import (
 
 def make_query(data: object) -> MagicMock:
     query = MagicMock()
-    for method_name in ("insert", "select", "eq", "limit", "order"):
+    for method_name in ("insert", "select", "eq", "in_", "limit", "order"):
         getattr(query, method_name).return_value = query
     query.execute.return_value = SimpleNamespace(data=data)
     return query
@@ -132,6 +132,73 @@ async def test_list_messages_filters_and_maps_rows() -> None:
     assert result == [message]
     query.eq.assert_any_call("tenant_id", "tenant-1")
     query.order.assert_called_once_with("created_at")
+
+
+@pytest.mark.anyio
+async def test_list_messages_includes_persisted_citations() -> None:
+    message = make_message(role="assistant")
+    citation_row = {
+        "citation_id": "44444444-4444-4444-8444-444444444444",
+        "tenant_id": "tenant-1",
+        "assistant_message_id": message.message_id,
+        "citation_label": "C1",
+        "document_id": "web",
+        "chunk_id": "web-1",
+        "page_number": 0,
+        "source": "https://www.cdc.gov/fever",
+        "title": "CDC fever guidance",
+    }
+    row = {**message_row(message), "citations": [citation_row]}
+    query = make_query([row])
+    client = MagicMock()
+    client.table.return_value = query
+    store = SupabaseConversationStore(client)
+
+    result = await store.list_messages(message.conversation_id, "tenant-1")
+
+    assert result[0].citations == [
+        CitationRecord(
+            citation_id=citation_row["citation_id"],
+            tenant_id="tenant-1",
+            assistant_message_id=message.message_id,
+            citation_label="C1",
+            document_id="web",
+            chunk_id="web-1",
+            page_number=0,
+            source="https://www.cdc.gov/fever",
+            title="CDC fever guidance",
+        )
+    ]
+
+
+@pytest.mark.anyio
+async def test_list_recent_messages_is_tenant_scoped_and_chronological() -> None:
+    older = make_message(role="user")
+    newer = Message(
+        message_id="33333333-3333-4333-8333-333333333333",
+        conversation_id=older.conversation_id,
+        tenant_id=older.tenant_id,
+        role="assistant",
+        content="Hypertension is elevated blood pressure.",
+        created_at=datetime(2026, 11, 10, 10, 2, tzinfo=timezone.utc),
+    )
+    query = make_query([message_row(newer), message_row(older)])
+    client = MagicMock()
+    client.table.return_value = query
+    store = SupabaseConversationStore(client)
+
+    result = await store.list_recent_messages(
+        older.conversation_id,
+        "tenant-1",
+        limit=8,
+    )
+
+    assert result == [older, newer]
+    query.eq.assert_any_call("conversation_id", older.conversation_id)
+    query.eq.assert_any_call("tenant_id", "tenant-1")
+    query.in_.assert_called_once_with("role", ["user", "assistant"])
+    query.order.assert_called_once_with("created_at", desc=True)
+    query.limit.assert_called_once_with(8)
 
 
 @pytest.mark.anyio

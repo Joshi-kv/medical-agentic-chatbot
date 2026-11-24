@@ -17,13 +17,6 @@ class ConversationResponse(BaseModel):
     updated_at: datetime
 
 
-class MessageResponse(BaseModel):
-    message_id: str
-    role: str
-    content: str
-    created_at: datetime
-
-
 class CreateTurnRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000)
     document_id: UUID | None = None
@@ -36,6 +29,14 @@ class CitationResponse(BaseModel):
     page_number: int
     source: str
     title: str | None
+
+
+class MessageResponse(BaseModel):
+    message_id: str
+    role: str
+    content: str
+    created_at: datetime
+    citations: list[CitationResponse]
 
 
 class TurnResponse(BaseModel):

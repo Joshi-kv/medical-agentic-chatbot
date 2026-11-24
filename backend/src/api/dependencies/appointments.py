@@ -3,7 +3,7 @@ from functools import lru_cache
 from fastapi import HTTPException, Request, status
 from langgraph.graph.state import CompiledStateGraph
 
-from agent.nodes.appointments import AppointmentNodes
+from agent.workflows.appointments.nodes import AppointmentNodes
 from api.dependencies.human_review import get_human_review_service
 from integrations.nvidia_nim import get_nvidia_nim_chat_model
 from integrations.supabase import get_supabase_client

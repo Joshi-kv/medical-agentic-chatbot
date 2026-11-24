@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Literal, Protocol
 from uuid import uuid4
@@ -33,16 +33,6 @@ class Conversation:
 
 
 @dataclass(frozen=True)
-class Message:
-    message_id: str
-    conversation_id: str
-    tenant_id: str
-    role: MessageRole
-    content: str
-    created_at: datetime
-
-
-@dataclass(frozen=True)
 class CitationRecord:
     citation_id: str
     tenant_id: str
@@ -53,6 +43,17 @@ class CitationRecord:
     page_number: int
     source: str
     title: str | None
+
+
+@dataclass(frozen=True)
+class Message:
+    message_id: str
+    conversation_id: str
+    tenant_id: str
+    role: MessageRole
+    content: str
+    created_at: datetime
+    citations: list[CitationRecord] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -89,6 +90,13 @@ class ConversationStore(Protocol):
         self,
         conversation_id: str,
         tenant_id: str,
+    ) -> list[Message]: ...
+
+    async def list_recent_messages(
+        self,
+        conversation_id: str,
+        tenant_id: str,
+        limit: int,
     ) -> list[Message]: ...
 
     async def start_turn(
@@ -185,6 +193,33 @@ class ConversationService:
             )
         except Exception as error:
             raise ConversationError("Message lookup failed.") from error
+
+    async def list_recent_messages(
+        self,
+        conversation_id: str,
+        tenant_id: str,
+        actor_id: str,
+        limit: int = 8,
+    ) -> list[Message]:
+        if limit < 1 or limit > 20:
+            raise InvalidConversationInput(
+                "Message history limit must be between 1 and 20."
+            )
+
+        conversation = await self.get(
+            conversation_id=conversation_id,
+            tenant_id=tenant_id,
+            actor_id=actor_id,
+        )
+
+        try:
+            return await self._store.list_recent_messages(
+                conversation_id=conversation.conversation_id,
+                tenant_id=conversation.tenant_id,
+                limit=limit,
+            )
+        except Exception as error:
+            raise ConversationError("Recent message lookup failed.") from error
 
     def _normalize_title(self, title: str | None) -> str | None:
         if title is None:

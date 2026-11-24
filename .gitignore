@@ -206,6 +206,9 @@ tempCodeRunnerFile.py
 # Ruff stuff:
 .ruff_cache/
 
+# LangGraph local development state
+.langgraph_api/
+
 # PyPI configuration file
 .pypirc
 

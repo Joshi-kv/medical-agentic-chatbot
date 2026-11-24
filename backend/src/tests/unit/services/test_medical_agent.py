@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -11,6 +11,7 @@ from services.answering import (
     AnswerProgress,
     AnswerResult,
 )
+from services.conversation_context import ContextMessage, ConversationContextError
 from services.intent_router import IntentRouterError
 from services.medical_agent import (
     HUMAN_REVIEW_MESSAGE,
@@ -19,10 +20,13 @@ from services.medical_agent import (
 )
 
 
-def make_agent() -> tuple[MedicalAgent, AsyncMock, AsyncMock, AsyncMock]:
+def make_agent(
+    contextualizer: AsyncMock | None = None,
+) -> tuple[MedicalAgent, AsyncMock, AsyncMock, AsyncMock]:
     router = AsyncMock()
     answering = AsyncMock()
     appointments = AsyncMock()
+    contextualizer = contextualizer or AsyncMock()
     appointments.has_active_request.return_value = False
     agent = MedicalAgent(
         emergency_guardrail=EmergencyGuardrail(
@@ -36,8 +40,168 @@ def make_agent() -> tuple[MedicalAgent, AsyncMock, AsyncMock, AsyncMock]:
         intent_router=router,
         answering_service=answering,
         appointment_workflow=appointments,
+        contextualizer=contextualizer,
     )
     return agent, router, answering, appointments
+
+
+@pytest.mark.anyio
+async def test_follow_up_uses_contextualized_query_for_routing_and_answering() -> None:
+    contextualizer = AsyncMock()
+    contextualizer.rewrite.return_value = (
+        "What are the symptoms of the common cold?"
+    )
+    agent, router, answering, _ = make_agent(contextualizer)
+    router.classify.return_value = RouteDecision(
+        route=AgentRoute.EDUCATION,
+        confidence=0.95,
+    )
+    answering.answer.return_value = AnswerResult(
+        answer="Common cold symptoms include congestion [C1].",
+        citations=[],
+        sufficient_evidence=True,
+        safety_notice=SAFETY_NOTICE,
+    )
+    history = [
+        ContextMessage(role="user", content="What is the common cold?"),
+        ContextMessage(role="assistant", content="It is a viral infection."),
+    ]
+
+    await agent.answer(
+        query="What are its symptoms?",
+        tenant_id="tenant-1",
+        conversation_history=history,
+    )
+
+    contextualizer.rewrite.assert_awaited_once_with(
+        query="What are its symptoms?",
+        history=history,
+    )
+    router.classify.assert_awaited_once_with(
+        "What are the symptoms of the common cold?"
+    )
+    answering.answer.assert_awaited_once_with(
+        query="What are the symptoms of the common cold?",
+        tenant_id="tenant-1",
+        document_id=None,
+    )
+
+
+@pytest.mark.anyio
+async def test_contextualizer_failure_falls_back_to_original_query() -> None:
+    contextualizer = AsyncMock()
+    contextualizer.rewrite.side_effect = ConversationContextError("unavailable")
+    agent, router, answering, _ = make_agent(contextualizer)
+    router.classify.return_value = RouteDecision(
+        route=AgentRoute.CLARIFICATION,
+        confidence=0.9,
+        follow_up_question="Which condition do you mean?",
+    )
+
+    result = await agent.answer(
+        query="What are its symptoms?",
+        tenant_id="tenant-1",
+        conversation_history=[
+            ContextMessage(role="user", content="What is the common cold?")
+        ],
+    )
+
+    router.classify.assert_awaited_once_with("What are its symptoms?")
+    answering.answer.assert_not_awaited()
+    assert result.answer == "Which condition do you mean?"
+
+
+@pytest.mark.anyio
+async def test_contextualized_emergency_stops_before_router() -> None:
+    contextualizer = AsyncMock()
+    contextualizer.rewrite.return_value = "approved emergency test phrase"
+    agent, router, answering, _ = make_agent(contextualizer)
+
+    result = await agent.answer(
+        query="It is getting worse",
+        tenant_id="tenant-1",
+        conversation_history=[
+            ContextMessage(role="user", content="I have chest pain")
+        ],
+    )
+
+    assert result.route == "emergency"
+    router.classify.assert_not_awaited()
+    answering.answer.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_active_appointment_does_not_use_general_contextualizer() -> None:
+    contextualizer = AsyncMock()
+    agent, router, _, appointments = make_agent(contextualizer)
+    appointments.has_active_request.return_value = True
+    appointments.run.return_value = AnswerResult(
+        answer="What date would you prefer?",
+        citations=[],
+        sufficient_evidence=False,
+        safety_notice=SAFETY_NOTICE,
+        route="appointment_request",
+    )
+
+    await agent.answer(
+        query="Tomorrow morning",
+        tenant_id="tenant-1",
+        conversation_id="conversation-1",
+        run_id="run-1",
+        conversation_history=[
+            ContextMessage(role="assistant", content="What date do you prefer?")
+        ],
+    )
+
+    contextualizer.rewrite.assert_not_awaited()
+    router.classify.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_stream_uses_contextualized_query() -> None:
+    contextualizer = AsyncMock()
+    contextualizer.rewrite.return_value = (
+        "What are the symptoms of the common cold?"
+    )
+    agent, router, answering, _ = make_agent(contextualizer)
+    router.classify.return_value = RouteDecision(
+        route=AgentRoute.EDUCATION,
+        confidence=0.95,
+    )
+    result = AnswerResult(
+        answer="Symptoms include congestion [C1].",
+        citations=[],
+        sufficient_evidence=True,
+        safety_notice=SAFETY_NOTICE,
+    )
+
+    async def answer_stream(**kwargs: object):
+        yield AnswerCompleted(result=result)
+
+    answering.stream_answer = MagicMock(side_effect=answer_stream)
+    history = [
+        ContextMessage(role="user", content="What is the common cold?"),
+        ContextMessage(role="assistant", content="It is a viral infection."),
+    ]
+
+    events = [
+        event
+        async for event in agent.stream_answer(
+            query="What are its symptoms?",
+            tenant_id="tenant-1",
+            conversation_history=history,
+        )
+    ]
+
+    assert any(
+        isinstance(event, AnswerProgress) and event.stage == "context"
+        for event in events
+    )
+    answering.stream_answer.assert_called_once_with(
+        query="What are the symptoms of the common cold?",
+        tenant_id="tenant-1",
+        document_id=None,
+    )
 
 
 @pytest.mark.anyio

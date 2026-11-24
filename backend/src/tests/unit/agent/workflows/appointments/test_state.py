@@ -1,6 +1,6 @@
 from typing import get_args
 
-from agent.state import AgentRoute, MedicalAgentState
+from agent.workflows.appointments.state import AgentRoute, MedicalAgentState
 
 
 def test_agent_route_literals() -> None:
