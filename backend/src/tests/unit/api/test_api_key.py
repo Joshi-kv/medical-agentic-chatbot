@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
@@ -13,6 +14,7 @@ from api.security.api_key import (
     authenticate_staff_api_key,
 )
 from config.settings import Settings, get_settings
+from services.api_keys import PATIENT_SCOPES, APIKeyError, APIKeyRecord, APIKeyService
 
 
 def make_mock_settings(
@@ -99,6 +101,38 @@ def test_authenticate_api_key_empty_expected_key_raises_401() -> None:
         authenticate_api_key(provided_key="", settings=settings)
 
     assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+def test_authenticate_dynamic_api_key_success() -> None:
+    settings = make_mock_settings(api_key="legacy-key")
+    service = MagicMock(spec=APIKeyService)
+    service.authenticate.return_value = APIKeyRecord(
+        key_id="patient-key",
+        tenant_id="tenant-test",
+        name="Maya",
+        key_prefix="med_example1",
+        key_hash="a" * 64,
+        scopes=PATIENT_SCOPES,
+        created_at=datetime(2026, 11, 23, tzinfo=timezone.utc),
+    )
+
+    principal = authenticate_api_key("med_example-key", settings, service)
+
+    assert principal.key_id == "patient-key"
+    assert principal.scopes == PATIENT_SCOPES
+    service.authenticate.assert_called_once_with("med_example-key")
+
+
+def test_authenticate_dynamic_api_key_store_failure_returns_503() -> None:
+    settings = make_mock_settings(api_key="legacy-key")
+    service = MagicMock(spec=APIKeyService)
+    service.authenticate.side_effect = APIKeyError("store unavailable")
+
+    with pytest.raises(HTTPException) as exc_info:
+        authenticate_api_key("med_example-key", settings, service)
+
+    assert exc_info.value.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert exc_info.value.detail["code"] == "auth_unavailable"
 
 
 def test_require_scope_authorizes_valid_scope() -> None:

@@ -70,6 +70,7 @@ async def test_run_turn_persists_answer_and_citations() -> None:
     result = await service.run(
         conversation_id="11111111-1111-4111-8111-111111111111",
         tenant_id="tenant-1",
+        actor_id="actor-1",
         query="  What is hypertension?  ",
         document_id=document_id,
     )
@@ -77,6 +78,7 @@ async def test_run_turn_persists_answer_and_citations() -> None:
     conversations.get.assert_awaited_once_with(
         "11111111-1111-4111-8111-111111111111",
         "tenant-1",
+        "actor-1",
     )
     answering.answer.assert_awaited_once_with(
         query="What is hypertension?",
@@ -114,6 +116,7 @@ async def test_human_review_route_creates_case() -> None:
     result = await service.run(
         conversation_id="11111111-1111-4111-8111-111111111111",
         tenant_id="tenant-1",
+        actor_id="actor-1",
         query="Should I stop my prescription?",
     )
 
@@ -142,6 +145,7 @@ async def test_appointment_review_case_is_returned() -> None:
     result = await service.run(
         conversation_id="11111111-1111-4111-8111-111111111111",
         tenant_id="tenant-1",
+        actor_id="actor-1",
         query="Yes, I consent.",
     )
 
@@ -154,7 +158,7 @@ async def test_run_turn_rejects_invalid_query(query: str) -> None:
     service, conversations, store, answering = make_service()
 
     with pytest.raises(InvalidTurnInput):
-        await service.run("conversation-1", "tenant-1", query)
+        await service.run("conversation-1", "tenant-1", "actor-1", query)
 
     conversations.get.assert_not_awaited()
     store.start_turn.assert_not_awaited()
@@ -171,6 +175,7 @@ async def test_run_turn_marks_started_run_failed_when_answering_fails() -> None:
         await service.run(
             "11111111-1111-4111-8111-111111111111",
             "tenant-1",
+            "actor-1",
             "What is hypertension?",
         )
 
@@ -192,6 +197,7 @@ async def test_run_turn_wraps_start_persistence_failure() -> None:
         await service.run(
             "11111111-1111-4111-8111-111111111111",
             "tenant-1",
+            "actor-1",
             "What is hypertension?",
         )
 
@@ -211,6 +217,7 @@ async def test_run_turn_does_not_mask_original_error_when_fail_update_fails() ->
         await service.run(
             "11111111-1111-4111-8111-111111111111",
             "tenant-1",
+            "actor-1",
             "What is hypertension?",
         )
 
@@ -254,6 +261,7 @@ async def test_stream_turn_emits_expected_events_and_persists_turn() -> None:
         async for event in service.stream(
             conversation_id="11111111-1111-4111-8111-111111111111",
             tenant_id="tenant-1",
+            actor_id="actor-1",
             query="  What is hypertension?  ",
             document_id=document_id,
         )
@@ -262,6 +270,7 @@ async def test_stream_turn_emits_expected_events_and_persists_turn() -> None:
     conversations.get.assert_awaited_once_with(
         "11111111-1111-4111-8111-111111111111",
         "tenant-1",
+        "actor-1",
     )
     answering.stream_answer.assert_called_once_with(
         query="What is hypertension?",
@@ -322,6 +331,7 @@ async def test_human_review_stream_returns_case_id() -> None:
         async for event in service.stream(
             conversation_id="11111111-1111-4111-8111-111111111111",
             tenant_id="tenant-1",
+            actor_id="actor-1",
             query="Should I stop my prescription?",
         )
     ]
@@ -338,7 +348,7 @@ async def test_stream_turn_rejects_invalid_query(query: str) -> None:
     service, conversations, store, answering = make_service()
 
     with pytest.raises(InvalidTurnInput):
-        async for _ in service.stream("conversation-1", "tenant-1", query):
+        async for _ in service.stream("conversation-1", "tenant-1", "actor-1", query):
             pass
 
     conversations.get.assert_not_awaited()
@@ -361,6 +371,7 @@ async def test_stream_turn_emits_error_on_answering_failure() -> None:
         async for event in service.stream(
             conversation_id="11111111-1111-4111-8111-111111111111",
             tenant_id="tenant-1",
+            actor_id="actor-1",
             query="What is hypertension?",
         )
     ]
@@ -395,6 +406,7 @@ async def test_stream_turn_handles_asyncio_cancellation() -> None:
         async for _ in service.stream(
             conversation_id="11111111-1111-4111-8111-111111111111",
             tenant_id="tenant-1",
+            actor_id="actor-1",
             query="What is hypertension?",
         ):
             pass
@@ -421,6 +433,7 @@ async def test_stream_turn_emits_error_when_no_completed_result() -> None:
         async for event in service.stream(
             conversation_id="11111111-1111-4111-8111-111111111111",
             tenant_id="tenant-1",
+            actor_id="actor-1",
             query="What is hypertension?",
         )
     ]
@@ -443,6 +456,7 @@ async def test_stream_turn_raises_turn_error_if_start_turn_fails() -> None:
         async for _ in service.stream(
             conversation_id="11111111-1111-4111-8111-111111111111",
             tenant_id="tenant-1",
+            actor_id="actor-1",
             query="What is hypertension?",
         ):
             pass

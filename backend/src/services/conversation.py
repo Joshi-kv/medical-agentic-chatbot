@@ -82,6 +82,7 @@ class ConversationStore(Protocol):
         self,
         conversation_id: str,
         tenant_id: str,
+        actor_id: str,
     ) -> Conversation | None: ...
 
     async def list_messages(
@@ -143,17 +144,20 @@ class ConversationService:
         self,
         conversation_id: str,
         tenant_id: str,
+        actor_id: str,
     ) -> Conversation:
         normalized_conversation_id = self._required_value(
             conversation_id,
             "conversation_id",
         )
         normalized_tenant_id = self._required_value(tenant_id, "tenant_id")
+        normalized_actor_id = self._required_value(actor_id, "actor_id")
 
         try:
             conversation = await self._store.get_conversation(
                 conversation_id=normalized_conversation_id,
                 tenant_id=normalized_tenant_id,
+                actor_id=normalized_actor_id,
             )
         except Exception as error:
             raise ConversationError("Conversation lookup failed.") from error
@@ -167,10 +171,12 @@ class ConversationService:
         self,
         conversation_id: str,
         tenant_id: str,
+        actor_id: str,
     ) -> list[Message]:
         conversation = await self.get(
             conversation_id=conversation_id,
             tenant_id=tenant_id,
+            actor_id=actor_id,
         )
         try:
             return await self._store.list_messages(

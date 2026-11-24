@@ -70,12 +70,13 @@ class TurnService:
         self,
         conversation_id: str,
         tenant_id: str,
+        actor_id: str,
         query: str,
         document_id: UUID | None = None,
     ) -> TurnResult:
         normalized_query = self._validate_query(query)
 
-        await self._conversations.get(conversation_id, tenant_id)
+        await self._conversations.get(conversation_id, tenant_id, actor_id)
 
         user_message = Message(
             message_id=str(uuid4()),
@@ -161,12 +162,13 @@ class TurnService:
         self,
         conversation_id: str,
         tenant_id: str,
+        actor_id: str,
         query: str,
         document_id: UUID | None = None,
     ) -> AsyncIterator[TurnStreamEvent]:
         normalized_query = self._validate_query(query)
 
-        await self._conversations.get(conversation_id, tenant_id)
+        await self._conversations.get(conversation_id, tenant_id, actor_id)
 
         user_message = Message(
             message_id=str(uuid4()),

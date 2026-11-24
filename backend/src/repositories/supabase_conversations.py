@@ -45,6 +45,7 @@ class SupabaseConversationStore:
         self,
         conversation_id: str,
         tenant_id: str,
+        actor_id: str,
     ) -> Conversation | None:
         response = await to_thread.run_sync(
             lambda: self._client.table("conversations")
@@ -54,6 +55,7 @@ class SupabaseConversationStore:
             )
             .eq("conversation_id", conversation_id)
             .eq("tenant_id", tenant_id)
+            .eq("actor_id", actor_id)
             .limit(1)
             .execute()
         )

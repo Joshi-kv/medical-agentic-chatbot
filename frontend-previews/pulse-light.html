@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#edf4f0">
+  <title>Selected — Pulse Light</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="shared.css">
+</head>
+<body class="pulse-light">
+  <nav class="preview-switcher" aria-label="Design previews">
+    <a href="variation-1.html">01</a><a href="variation-2.html">02</a><a href="variation-3.html">03</a><a href="variation-4.html">04</a><a href="variation-5.html">05</a><a href="pulse-light.html" aria-current="page">Final</a>
+  </nav>
+  <div class="pl-shell">
+    <header class="pl-header">
+      <div class="pl-brand"><div class="brand-mark">+</div><span>Pulse Care</span></div>
+      <div class="pl-header-actions"><span class="pl-private">Private medical assistant</span><button class="icon-button" aria-label="Conversation history">◷</button><button class="icon-button" aria-label="Profile">M</button></div>
+    </header>
+    <main class="pl-stage">
+      <section class="pl-presence" aria-label="Assistant status">
+        <div class="pl-orb" aria-hidden="true"></div>
+        <div><div class="pl-listening">Ready to help</div><h1>Your care companion</h1><p>Listening carefully, checking trusted evidence, and connecting you to people when needed.</p></div>
+      </section>
+      <section class="pl-chat">
+        <header class="pl-chat-head"><div><div class="avatar">AI</div><div><strong>Care conversation</strong><span>Sources and safety checks are always visible</span></div></div><button class="pl-new">＋ New conversation</button></header>
+        <div class="pl-thread">
+          <p class="pl-user-message">Can I keep taking my medication before tomorrow's blood test?</p>
+          <div class="pl-agent-status" aria-label="Completed agent steps"><span>Question understood</span><span>Safety checked</span><span>Evidence found</span></div>
+          <article class="pl-answer"><h2>Usually yes, with two things to check first.</h2><p>Most regular medication can continue before a blood test. However, fasting instructions and some prescriptions can affect the result.</p><p>Tell me the medicine and test name for a more precise answer. If anything remains unclear, I can send the question to the pathology department.</p><div class="pl-answer-actions"><button class="pl-action">▤ View 2 sources</button><button class="pl-action primary">Contact the department →</button></div></article>
+        </div>
+        <div class="pl-composer-wrap"><form class="composer"><button class="pl-voice" type="button" aria-label="Start voice conversation">◉</button><input aria-label="Message" placeholder="Ask a health question…"><button class="send" aria-label="Send">↑</button></form><p class="pl-hint">This assistant provides guidance, not a diagnosis. In an emergency, contact local emergency services.</p></div>
+      </section>
+    </main>
+  </div>
+  <div class="demo-toast" role="status"></div>
+  <script src="preview.js"></script>
+</body>
+</html>

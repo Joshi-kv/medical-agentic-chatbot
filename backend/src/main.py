@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from api.routers.answering import router as answering_router
+from api.routers.api_keys import router as api_keys_router
 from api.routers.conversations import router as conversations_router
 from api.routers.documents import router as documents_router
 from api.routers.health import router as health_router
@@ -16,6 +17,7 @@ app = FastAPI(
 )
 
 app.include_router(health_router, prefix="/health", tags=["health"])
+app.include_router(api_keys_router)
 app.include_router(documents_router)
 app.include_router(retrieval_router)
 app.include_router(answering_router)
