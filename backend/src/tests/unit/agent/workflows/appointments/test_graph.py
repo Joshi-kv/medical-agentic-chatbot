@@ -8,7 +8,7 @@ from langgraph.types import Command, interrupt
 
 from agent.workflows.appointments.graph import build_appointment_graph
 from agent.workflows.appointments.nodes import AppointmentNodes
-from agent.workflows.appointments.state import MedicalAgentState
+from agent.workflows.appointments.state import AppointmentState as MedicalAgentState
 from services.appointment_extractor import (
     AppointmentExtractor,
     ExtractedAppointmentDetails,

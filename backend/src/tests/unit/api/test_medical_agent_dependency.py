@@ -1,10 +1,12 @@
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from api.dependencies.medical_agent import get_medical_agent
+from agent.workflows.medical_agent.nodes import MedicalAgentNodes
+from api.dependencies.medical_agent import build_medical_agent_nodes, get_medical_agent
 from services.medical_agent import MedicalAgent
 
 
-def test_get_medical_agent_wires_services() -> None:
+def test_build_medical_agent_nodes_wires_services() -> None:
     model = MagicMock()
     answering = MagicMock()
     appointment_graph = MagicMock()
@@ -19,9 +21,21 @@ def test_get_medical_agent_wires_services() -> None:
             return_value=answering,
         ),
     ):
-        agent = get_medical_agent(appointment_graph=appointment_graph)
+        nodes = build_medical_agent_nodes(appointment_graph=appointment_graph)
 
-        assert isinstance(agent, MedicalAgent)
-        assert agent._intent_router._chat_model is model
-        assert agent._answering_service is answering
-        assert agent._appointment_workflow._graph is appointment_graph
+        assert isinstance(nodes, MedicalAgentNodes)
+        assert nodes._intent_router._chat_model is model
+        assert nodes._answering_service is answering
+        assert nodes._appointment_workflow._graph is appointment_graph
+
+
+def test_get_medical_agent_uses_app_graph() -> None:
+    graph = MagicMock()
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
+        medical_agent_graph=graph
+    )))
+
+    agent = get_medical_agent(request=request)
+
+    assert isinstance(agent, MedicalAgent)
+    assert agent._graph is graph

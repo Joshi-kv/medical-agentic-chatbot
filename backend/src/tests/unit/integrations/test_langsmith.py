@@ -2,6 +2,7 @@ import os
 from types import SimpleNamespace
 
 import pytest
+from langsmith import utils as langsmith_utils
 from langsmith.utils import get_tracer_project, tracing_is_enabled
 from pydantic import SecretStr
 
@@ -31,6 +32,18 @@ def clear_langsmith_environment(monkeypatch: pytest.MonkeyPatch) -> None:
         "LANGSMITH_HIDE_OUTPUTS",
     ):
         monkeypatch.delenv(name, raising=False)
+
+
+@pytest.fixture(autouse=True)
+def isolate_langsmith_environment():
+    yield
+
+    # These helpers cache environment lookups. Clear them after every test so a
+    # placeholder unit-test key cannot enable real tracing in later tests.
+    os.environ["LANGSMITH_TRACING"] = "false"
+    os.environ.pop("LANGSMITH_API_KEY", None)
+    langsmith_utils.get_env_var.cache_clear()
+    langsmith_utils.get_tracer_project.cache_clear()
 
 
 def test_configure_langsmith_tracing_sets_safe_environment(

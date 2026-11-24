@@ -3,6 +3,7 @@
     "."
   ],
   "graphs": {
+    "medical_agent": "./src/studio_graphs.py:medical_agent_graph",
     "appointment_workflow": "./src/studio_graphs.py:appointment_graph",
     "trusted_medical_web_search": "./src/studio_graphs.py:web_search_graph"
   },

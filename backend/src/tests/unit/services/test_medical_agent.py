@@ -2,6 +2,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from agent.workflows.medical_agent.graph import build_medical_agent_graph
+from agent.workflows.medical_agent.nodes import (
+    HUMAN_REVIEW_MESSAGE,
+    ROUTING_FAILURE_MESSAGE,
+    MedicalAgentNodes,
+)
 from guardrails.emergency import EmergencyGuardrail, EmergencyRule
 from guardrails.models import AgentRoute, RouteDecision
 from services.answering import (
@@ -13,11 +19,7 @@ from services.answering import (
 )
 from services.conversation_context import ContextMessage, ConversationContextError
 from services.intent_router import IntentRouterError
-from services.medical_agent import (
-    HUMAN_REVIEW_MESSAGE,
-    ROUTING_FAILURE_MESSAGE,
-    MedicalAgent,
-)
+from services.medical_agent import MedicalAgent
 
 
 def make_agent(
@@ -28,7 +30,7 @@ def make_agent(
     appointments = AsyncMock()
     contextualizer = contextualizer or AsyncMock()
     appointments.has_active_request.return_value = False
-    agent = MedicalAgent(
+    nodes = MedicalAgentNodes(
         emergency_guardrail=EmergencyGuardrail(
             rules=(
                 EmergencyRule(
@@ -42,6 +44,7 @@ def make_agent(
         appointment_workflow=appointments,
         contextualizer=contextualizer,
     )
+    agent = MedicalAgent(graph=build_medical_agent_graph(nodes=nodes))
     return agent, router, answering, appointments
 
 

@@ -10,7 +10,7 @@ AgentRoute = Literal[
 ]
 
 
-class MedicalAgentState(TypedDict, total=False):
+class AppointmentState(TypedDict, total=False):
     tenant_id: str
     conversation_id: str
     run_id: str

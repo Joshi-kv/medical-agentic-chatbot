@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from agent.workflows.appointments.nodes import AppointmentNodes
-from agent.workflows.appointments.state import MedicalAgentState
+from agent.workflows.appointments.state import AppointmentState as MedicalAgentState
 from services.appointment_extractor import (
     AppointmentExtractor,
     ExtractedAppointmentDetails,
