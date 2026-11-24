@@ -2,7 +2,7 @@ from typing import Literal
 
 from langgraph.types import interrupt
 
-from agent.workflows.appointments.state import MedicalAgentState
+from agent.workflows.appointments.state import AppointmentState
 from services.appointment_extractor import AppointmentExtractor
 from services.appointments import (
     AppointmentConflict,
@@ -39,7 +39,7 @@ class AppointmentNodes:
         self._human_review_service = human_review_service
 
     async def ensure_appointment_request(
-        self, state: MedicalAgentState
+        self, state: AppointmentState
     ) -> dict[str, object]:
         """Create appointment request on first turn"""
 
@@ -59,7 +59,7 @@ class AppointmentNodes:
 
     async def collect_appointment_details(
         self,
-        state: MedicalAgentState,
+        state: AppointmentState,
     ) -> dict[str, object]:
         """Extract and save info from latest message."""
         tenant_id = self._required_state(state, "tenant_id")
@@ -98,7 +98,7 @@ class AppointmentNodes:
 
     def choose_next_appointment_step(
         self,
-        state: MedicalAgentState,
+        state: AppointmentState,
     ) -> AppointmentNextStep:
         """Choose weather to ask followup or ask for review"""
 
@@ -114,7 +114,7 @@ class AppointmentNodes:
 
     async def ask_next_appointment_question(
         self,
-        state: MedicalAgentState,
+        state: AppointmentState,
     ) -> dict[str, object]:
         """Ask next follow up question"""
 
@@ -136,7 +136,7 @@ class AppointmentNodes:
 
     async def request_appointment_review(
         self,
-        state: MedicalAgentState,
+        state: AppointmentState,
     ) -> dict[str, object]:
         """Pause the appointment workflow for staff review."""
 
@@ -212,7 +212,7 @@ class AppointmentNodes:
 
     def choose_after_appointment_review(
         self,
-        state: MedicalAgentState,
+        state: AppointmentState,
     ) -> Literal[
         "book_appointment",
         "appointment_rejected",
@@ -230,7 +230,7 @@ class AppointmentNodes:
 
     async def book_appointment(
         self,
-        state: MedicalAgentState,
+        state: AppointmentState,
     ) -> dict[str, object]:
         """Book an appointment after staff approval."""
         if state.get("review_decision") != "approved":
@@ -274,7 +274,7 @@ class AppointmentNodes:
 
     async def appointment_rejected(
         self,
-        state: MedicalAgentState,
+        state: AppointmentState,
     ) -> dict[str, object]:
         """Record a rejected appointment request."""
         if state.get("review_decision") != "rejected":
@@ -326,7 +326,7 @@ class AppointmentNodes:
 
     def _required_state(
         self,
-        state: MedicalAgentState,
+        state: AppointmentState,
         field_name: str,
     ) -> str:
         value = state.get(field_name)

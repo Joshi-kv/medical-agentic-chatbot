@@ -1,6 +1,6 @@
 from typing import get_args
 
-from agent.workflows.appointments.state import AgentRoute, MedicalAgentState
+from agent.workflows.appointments.state import AgentRoute, AppointmentState
 
 
 def test_agent_route_literals() -> None:
@@ -15,7 +15,7 @@ def test_agent_route_literals() -> None:
     assert set(get_args(AgentRoute)) == expected_routes
 
 
-def test_medical_agent_state_keys() -> None:
+def test_appointment_state_keys() -> None:
     expected_keys = {
         "tenant_id",
         "conversation_id",
@@ -31,17 +31,17 @@ def test_medical_agent_state_keys() -> None:
         "response",
     }
 
-    assert MedicalAgentState.__optional_keys__ == expected_keys
-    assert MedicalAgentState.__required_keys__ == frozenset()
+    assert AppointmentState.__optional_keys__ == expected_keys
+    assert AppointmentState.__required_keys__ == frozenset()
 
 
-def test_medical_agent_state_empty_instantiation() -> None:
-    state: MedicalAgentState = {}
+def test_appointment_state_empty_instantiation() -> None:
+    state: AppointmentState = {}
     assert state == {}
 
 
-def test_medical_agent_state_partial_instantiation() -> None:
-    state: MedicalAgentState = {
+def test_appointment_state_partial_instantiation() -> None:
+    state: AppointmentState = {
         "tenant_id": "tenant-1",
         "conversation_id": "conv-123",
         "run_id": "run-456",
@@ -57,8 +57,8 @@ def test_medical_agent_state_partial_instantiation() -> None:
     assert "route" not in state
 
 
-def test_medical_agent_state_full_instantiation() -> None:
-    state: MedicalAgentState = {
+def test_appointment_state_full_instantiation() -> None:
+    state: AppointmentState = {
         "tenant_id": "tenant-1",
         "conversation_id": "conv-123",
         "run_id": "run-456",
@@ -84,8 +84,8 @@ def test_medical_agent_state_full_instantiation() -> None:
     assert state["response"] == "Your appointment has been successfully scheduled."
 
 
-def test_medical_agent_state_functional_update() -> None:
-    initial_state: MedicalAgentState = {
+def test_appointment_state_functional_update() -> None:
+    initial_state: AppointmentState = {
         "tenant_id": "tenant-1",
         "conversation_id": "conv-123",
         "run_id": "run-456",
@@ -93,7 +93,7 @@ def test_medical_agent_state_functional_update() -> None:
         "previous_assistant_message": None,
     }
 
-    updated_state: MedicalAgentState = {
+    updated_state: AppointmentState = {
         **initial_state,
         "route": "education",
         "response": "Hypertension is high blood pressure [C1].",

@@ -9,7 +9,9 @@ from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
 from agent.workflows.appointments.graph import build_appointment_graph
+from agent.workflows.medical_agent.graph import build_medical_agent_graph
 from api.dependencies.appointments import get_appointment_nodes
+from api.dependencies.medical_agent import build_medical_agent_nodes
 from config.settings import get_settings
 from integrations.langsmith import configure_langsmith_tracing
 from integrations.supabase import build_document_service
@@ -71,12 +73,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
             await checkpointer.setup()
 
-            app.state.appointment_graph = build_appointment_graph(
+            appointment_graph = build_appointment_graph(
                 nodes=get_appointment_nodes(),
+                checkpointer=checkpointer,
+            )
+            app.state.appointment_graph = appointment_graph
+            app.state.medical_agent_graph = build_medical_agent_graph(
+                nodes=build_medical_agent_nodes(appointment_graph),
                 checkpointer=checkpointer,
             )
 
             logger.info("Appointment workflow initialized")
+            logger.info("Medical-agent workflow initialized")
 
         yield
 

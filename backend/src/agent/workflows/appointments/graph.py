@@ -3,7 +3,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from agent.workflows.appointments.nodes import AppointmentNodes
-from agent.workflows.appointments.state import MedicalAgentState
+from agent.workflows.appointments.state import AppointmentState
 
 
 def build_appointment_graph(
@@ -12,7 +12,7 @@ def build_appointment_graph(
 ) -> CompiledStateGraph:
     """Build the multi-turn appointment workflow"""
 
-    builder = StateGraph(MedicalAgentState)
+    builder = StateGraph(AppointmentState)
 
     builder.add_node("ensure_appointment_request", nodes.ensure_appointment_request)
     builder.add_node("collect_appointment_details", nodes.collect_appointment_details)
